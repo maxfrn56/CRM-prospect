@@ -9,8 +9,12 @@ import {
   statusLabel,
   replyClassLabel,
   formatDate,
+  contactChannelLabel,
+  PROSPECT_STATUSES,
+  CONTACT_CHANNELS,
+  statusBadgeClass,
 } from "@/lib/utils";
-import { ArrowLeft, Globe, Mail, Phone, Loader2 } from "lucide-react";
+import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2 } from "lucide-react";
 
 interface AuditDetails {
   score: number;
@@ -38,6 +42,9 @@ interface ProspectDetail {
   auditDetails: string | null;
   status: string;
   replyClass: string | null;
+  contactChannel: string | null;
+  contactNotes: string | null;
+  contactedAt: string | null;
   siren: string | null;
   siret: string | null;
   nafCode: string | null;
@@ -67,11 +74,25 @@ export default function ProspectDetailPage() {
   const [prospect, setProspect] = useState<ProspectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
+  const [crmSaving, setCrmSaving] = useState(false);
+  const [crmSaved, setCrmSaved] = useState(false);
+  const [crmForm, setCrmForm] = useState({
+    status: "NEW",
+    contactChannel: "",
+    contactNotes: "",
+  });
 
   const load = useCallback(() => {
     fetch(`/api/prospects/${id}`)
       .then((r) => r.json())
-      .then(setProspect)
+      .then((data: ProspectDetail) => {
+        setProspect(data);
+        setCrmForm({
+          status: data.status,
+          contactChannel: data.contactChannel ?? "",
+          contactNotes: data.contactNotes ?? "",
+        });
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -90,6 +111,46 @@ export default function ProspectDetailPage() {
       load();
     } finally {
       setActionLoading("");
+    }
+  }
+
+  async function saveCrm(e?: React.FormEvent) {
+    e?.preventDefault();
+    setCrmSaving(true);
+    setCrmSaved(false);
+    try {
+      await fetch(`/api/prospects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: crmForm.status,
+          contactChannel: crmForm.contactChannel || null,
+          contactNotes: crmForm.contactNotes || null,
+        }),
+      });
+      load();
+      setCrmSaved(true);
+      setTimeout(() => setCrmSaved(false), 2000);
+    } finally {
+      setCrmSaving(false);
+    }
+  }
+
+  async function quickContact(channel: string) {
+    setCrmSaving(true);
+    try {
+      await fetch(`/api/prospects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "CONTACTED",
+          contactChannel: channel,
+          contactNotes: crmForm.contactNotes || null,
+        }),
+      });
+      load();
+    } finally {
+      setCrmSaving(false);
     }
   }
 
@@ -120,6 +181,107 @@ export default function ProspectDetailPage() {
       <div className="grid gap-6 p-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-1">
           <Card className="p-5">
+            <h3 className="text-sm font-semibold text-stone-900">
+              Suivi manuel
+            </h3>
+            <p className="mt-1 text-xs text-stone-500">
+              Contacté par Instagram, téléphone ou autre canal hors email
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => quickContact("INSTAGRAM")}
+                disabled={crmSaving}
+                className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 disabled:opacity-50"
+              >
+                ✓ Contacté Instagram
+              </button>
+              <button
+                type="button"
+                onClick={() => quickContact("PHONE")}
+                disabled={crmSaving}
+                className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 disabled:opacity-50"
+              >
+                ✓ Contacté téléphone
+              </button>
+            </div>
+
+            <form onSubmit={saveCrm} className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-stone-600">
+                  Statut
+                </label>
+                <select
+                  value={crmForm.status}
+                  onChange={(e) =>
+                    setCrmForm({ ...crmForm, status: e.target.value })
+                  }
+                  className="w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm"
+                >
+                  {PROSPECT_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {statusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-stone-600">
+                  Canal de contact
+                </label>
+                <select
+                  value={crmForm.contactChannel}
+                  onChange={(e) =>
+                    setCrmForm({ ...crmForm, contactChannel: e.target.value })
+                  }
+                  className="w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm"
+                >
+                  <option value="">— Non précisé —</option>
+                  {CONTACT_CHANNELS.map((c) => (
+                    <option key={c} value={c}>
+                      {contactChannelLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-stone-600">
+                  Notes
+                </label>
+                <textarea
+                  value={crmForm.contactNotes}
+                  onChange={(e) =>
+                    setCrmForm({ ...crmForm, contactNotes: e.target.value })
+                  }
+                  rows={3}
+                  placeholder="Ex: DM Instagram envoyé, site down confirmé…"
+                  className="w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm"
+                />
+              </div>
+              {prospect.contactedAt && (
+                <p className="text-xs text-stone-500">
+                  Contacté le {formatDate(prospect.contactedAt)}
+                  {prospect.contactChannel &&
+                    ` via ${contactChannelLabel(prospect.contactChannel)}`}
+                </p>
+              )}
+              <Button type="submit" size="sm" disabled={crmSaving} className="w-full">
+                {crmSaved ? (
+                  <>
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                    Enregistré
+                  </>
+                ) : crmSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  "Enregistrer le suivi"
+                )}
+              </Button>
+            </form>
+          </Card>
+
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase text-stone-500">
                 Score pertinence
@@ -133,6 +295,16 @@ export default function ProspectDetailPage() {
             <p className="mt-3 text-sm text-stone-600">
               {audit?.summary ?? "Audit non effectué"}
             </p>
+            <div className="mt-3">
+              <Badge className={statusBadgeClass(prospect.status)}>
+                {statusLabel(prospect.status)}
+              </Badge>
+              {prospect.contactChannel && (
+                <Badge className="ml-2 border-blue-200 bg-blue-50 text-blue-700">
+                  {contactChannelLabel(prospect.contactChannel)}
+                </Badge>
+              )}
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -175,22 +347,19 @@ export default function ProspectDetailPage() {
               {prospect.email ? (
                 <li className="flex items-center gap-2">
                   <Mail className="h-3.5 w-3.5" /> {prospect.email}
-                  {prospect.enrichmentSource?.includes("email-finder") && (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
-                      trouvé sur le site
-                    </span>
-                  )}
                 </li>
               ) : (
-                <li className="text-xs text-stone-400">
-                  Email non trouvé — lancez l&apos;audit pour chercher sur le site
-                </li>
+                <li className="text-xs text-stone-400">Email non trouvé</li>
               )}
               {prospect.website && (
                 <li className="flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5" />
                   <a
-                    href={prospect.website.startsWith("http") ? prospect.website : `https://${prospect.website}`}
+                    href={
+                      prospect.website.startsWith("http")
+                        ? prospect.website
+                        : `https://${prospect.website}`
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-stone-900 underline"
@@ -200,37 +369,16 @@ export default function ProspectDetailPage() {
                 </li>
               )}
             </ul>
-            {(prospect.siren || prospect.directorName) && (
+            {prospect.contactNotes && (
               <div className="mt-4 border-t border-stone-100 pt-3">
                 <p className="text-xs font-medium uppercase text-stone-500">
-                  Données légales (SIRENE)
+                  Notes CRM
                 </p>
-                <ul className="mt-2 space-y-1 text-xs text-stone-600">
-                  {prospect.legalName && (
-                    <li>Raison sociale : {prospect.legalName}</li>
-                  )}
-                  {prospect.siren && <li>SIREN : {prospect.siren}</li>}
-                  {prospect.siret && <li>SIRET : {prospect.siret}</li>}
-                  {prospect.nafCode && <li>NAF : {prospect.nafCode}</li>}
-                  {prospect.directorName && (
-                    <li>Dirigeant : {prospect.directorName}</li>
-                  )}
-                  {prospect.enrichmentSource && (
-                    <li>Source : {prospect.enrichmentSource}</li>
-                  )}
-                </ul>
+                <p className="mt-1 text-sm text-stone-700 whitespace-pre-wrap">
+                  {prospect.contactNotes}
+                </p>
               </div>
             )}
-            <div className="mt-3">
-              <Badge className="border-stone-200 bg-stone-50 text-stone-600">
-                {statusLabel(prospect.status)}
-              </Badge>
-              {prospect.replyClass && (
-                <Badge className="ml-2 border-emerald-200 bg-emerald-50 text-emerald-700">
-                  {replyClassLabel(prospect.replyClass)}
-                </Badge>
-              )}
-            </div>
           </Card>
         </div>
 
@@ -249,11 +397,6 @@ export default function ProspectDetailPage() {
                   ok={!audit.outdatedDesign}
                   invert
                 />
-                {audit.loadTimeMs && (
-                  <p className="text-xs text-stone-500 sm:col-span-2">
-                    Temps de chargement : {(audit.loadTimeMs / 1000).toFixed(1)}s
-                  </p>
-                )}
               </div>
               {audit.issues.length > 0 && (
                 <div className="mt-4">
@@ -267,18 +410,6 @@ export default function ProspectDetailPage() {
                   </ul>
                 </div>
               )}
-              {audit.opportunities.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-medium text-stone-500">
-                    Opportunités commerciales
-                  </p>
-                  <ul className="mt-1 list-inside list-disc text-sm text-stone-700">
-                    {audit.opportunities.map((o) => (
-                      <li key={o}>{o}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </Card>
           )}
 
@@ -287,19 +418,16 @@ export default function ProspectDetailPage() {
               <h3 className="text-sm font-semibold text-stone-900">Emails</h3>
             </div>
             {prospect.emails.length === 0 ? (
-              <p className="p-5 text-sm text-stone-500">Aucun email envoyé</p>
+              <p className="p-5 text-sm text-stone-500">
+                Aucun email envoyé via l&apos;app
+              </p>
             ) : (
               <ul className="divide-y divide-stone-100">
                 {prospect.emails.map((e) => (
                   <li key={e.id} className="px-5 py-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-stone-900">
-                        {e.subject}
-                      </p>
-                      <Badge className="border-stone-200 bg-stone-50 text-stone-600">
-                        {e.type.replace("FOLLOWUP_", "Relance J")}
-                      </Badge>
-                    </div>
+                    <p className="text-sm font-medium text-stone-900">
+                      {e.subject}
+                    </p>
                     <p className="mt-1 text-xs text-stone-500">
                       {e.status} · {formatDate(e.sentAt)}
                     </p>
@@ -319,24 +447,16 @@ export default function ProspectDetailPage() {
               <ul className="divide-y divide-stone-100">
                 {prospect.replies.map((r) => (
                   <li key={r.id} className="px-5 py-4">
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        className={
-                          r.classification === "HOT"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-stone-200 bg-stone-50 text-stone-600"
-                        }
-                      >
-                        {replyClassLabel(r.classification)}
-                      </Badge>
-                      <span className="text-xs text-stone-400">
-                        {formatDate(r.receivedAt)}
-                      </span>
-                    </div>
+                    <Badge
+                      className={
+                        r.classification === "HOT"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-stone-200 bg-stone-50 text-stone-600"
+                      }
+                    >
+                      {replyClassLabel(r.classification)}
+                    </Badge>
                     <p className="mt-2 text-sm text-stone-700">{r.aiSummary}</p>
-                    <p className="mt-2 text-xs text-stone-500 line-clamp-3">
-                      {r.bodyText}
-                    </p>
                   </li>
                 ))}
               </ul>

@@ -8,7 +8,7 @@ import {
   CampaignSidebar,
   type Campaign,
 } from "@/components/prospects/campaign-sidebar";
-import { scoreColor, statusLabel } from "@/lib/utils";
+import { scoreColor, statusLabel, contactChannelLabel } from "@/lib/utils";
 import { ArrowUpDown, ExternalLink, Loader2 } from "lucide-react";
 
 interface Prospect {
@@ -21,6 +21,7 @@ interface Prospect {
   website: string | null;
   auditScore: number;
   status: string;
+  contactChannel: string | null;
   campaign: { name: string; sector: string; city: string } | null;
   _count: { emails: number; replies: number };
 }
@@ -236,6 +237,11 @@ function ProspectsContent() {
                               <Badge className="border-stone-200 bg-stone-50 text-stone-600">
                                 {statusLabel(p.status)}
                               </Badge>
+                              {p.contactChannel && (
+                                <span className="ml-1.5 text-[10px] text-blue-600">
+                                  {contactChannelLabel(p.contactChannel)}
+                                </span>
+                              )}
                             </td>
                             <td className="px-5 py-3 text-xs text-stone-500">
                               {p.email ?? p.phone ?? "—"}

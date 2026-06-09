@@ -23,7 +23,11 @@ export async function GET(req: NextRequest) {
 
   const prospects = await prisma.prospect.findMany({
     where: {
-      emails: { some: { status: { in: ["SENT", "REPLIED"] } } },
+      OR: [
+        { emails: { some: { status: { in: ["SENT", "REPLIED"] } } } },
+        { contactedAt: { not: null } },
+        { status: { in: ["CONTACTED", "REPLIED", "HOT", "COLD", "CONVERTED"] } },
+      ],
       ...(statusFilter ? { status: statusFilter } : {}),
     },
     orderBy: { updatedAt: "desc" },

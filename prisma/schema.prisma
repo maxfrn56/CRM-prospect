@@ -45,6 +45,15 @@ enum ReplyClassification {
   UNKNOWN
 }
 
+enum ContactChannel {
+  EMAIL
+  INSTAGRAM
+  PHONE
+  LINKEDIN
+  IN_PERSON
+  OTHER
+}
+
 model SearchCampaign {
   id        String     @id @default(cuid())
   name      String
@@ -93,6 +102,11 @@ model Prospect {
 
   status          ProspectStatus @default(NEW)
   replyClass      ReplyClassification?
+
+  // Suivi manuel CRM
+  contactChannel  ContactChannel?
+  contactNotes    String?
+  contactedAt     DateTime?
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

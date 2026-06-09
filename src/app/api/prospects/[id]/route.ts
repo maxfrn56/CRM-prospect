@@ -6,8 +6,17 @@ import {
 } from "@/lib/services/prospect-service";
 import { findEmailForProspect } from "@/lib/enrichment";
 import { prisma } from "@/lib/db";
+import type { ContactChannel, ProspectStatus } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
+
+const CONTACTED_STATUSES: ProspectStatus[] = [
+  "CONTACTED",
+  "REPLIED",
+  "HOT",
+  "COLD",
+  "CONVERTED",
+];
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -86,13 +95,37 @@ export async function POST(req: NextRequest, { params }: Params) {
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const data = await req.json();
+  const data = (await req.json()) as {
+    status?: ProspectStatus;
+    email?: string;
+    contactChannel?: ContactChannel | null;
+    contactNotes?: string | null;
+  };
+
+  const current = await prisma.prospect.findUnique({ where: { id } });
+  if (!current) {
+    return NextResponse.json({ error: "Prospect introuvable" }, { status: 404 });
+  }
+
+  const nextStatus = data.status ?? current.status;
+  const becameContacted =
+    CONTACTED_STATUSES.includes(nextStatus) &&
+    !CONTACTED_STATUSES.includes(current.status);
 
   const prospect = await prisma.prospect.update({
     where: { id },
     data: {
-      status: data.status,
-      email: data.email,
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.email !== undefined ? { email: data.email || null } : {}),
+      ...(data.contactChannel !== undefined
+        ? { contactChannel: data.contactChannel }
+        : {}),
+      ...(data.contactNotes !== undefined
+        ? { contactNotes: data.contactNotes }
+        : {}),
+      ...(becameContacted && !current.contactedAt
+        ? { contactedAt: new Date() }
+        : {}),
     },
   });
 

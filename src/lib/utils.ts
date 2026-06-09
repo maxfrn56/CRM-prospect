@@ -62,11 +62,43 @@ export function emailTypeLabel(type: string): string {
   return labels[type] ?? type;
 }
 
+export function contactChannelLabel(channel: string): string {
+  const labels: Record<string, string> = {
+    EMAIL: "Email",
+    INSTAGRAM: "Instagram",
+    PHONE: "Téléphone",
+    LINKEDIN: "LinkedIn",
+    IN_PERSON: "En personne",
+    OTHER: "Autre",
+  };
+  return labels[channel] ?? channel;
+}
+
 export const OUTREACH_STEPS = [
   "INITIAL",
   "FOLLOWUP_J4",
   "FOLLOWUP_J7",
   "FOLLOWUP_J12",
+] as const;
+
+export const PROSPECT_STATUSES = [
+  "NEW",
+  "AUDITED",
+  "CONTACTED",
+  "REPLIED",
+  "HOT",
+  "COLD",
+  "CONVERTED",
+  "ARCHIVED",
+] as const;
+
+export const CONTACT_CHANNELS = [
+  "INSTAGRAM",
+  "PHONE",
+  "EMAIL",
+  "LINKEDIN",
+  "IN_PERSON",
+  "OTHER",
 ] as const;
 
 export function statusBadgeClass(status: string): string {

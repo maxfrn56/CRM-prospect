@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader, Card, Badge, StatCard, EmptyState } from "@/components/ui";
 import {
+  contactChannelLabel,
   emailTypeLabel,
   formatDate,
   OUTREACH_STEPS,
@@ -36,6 +37,8 @@ interface OutreachProspect {
   city: string | null;
   status: string;
   replyClass: string | null;
+  contactChannel: string | null;
+  contactedAt: string | null;
   campaign: { name: string } | null;
   emails: OutreachEmail[];
   replies: OutreachReply[];
@@ -151,7 +154,7 @@ export default function OutreachPage() {
           {loading ? (
             <div className="p-8 text-sm text-stone-500">Chargement…</div>
           ) : !data || data.prospects.length === 0 ? (
-            <EmptyState message="Aucun email envoyé pour l'instant." />
+            <EmptyState message="Aucun prospect contacté pour l'instant." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -199,14 +202,22 @@ export default function OutreachPage() {
                         </td>
                         <td className="px-5 py-4">
                           <EmailTimeline emails={p.emails} />
-                          {lastSent && (
+                          {lastSent ? (
                             <p className="mt-1.5 max-w-xs truncate text-[11px] text-stone-400">
                               {emailTypeLabel(lastSent.type)} : {lastSent.subject}
                             </p>
-                          )}
+                          ) : p.contactChannel ? (
+                            <p className="mt-1.5 text-[11px] text-blue-600">
+                              Contact manuel · {contactChannelLabel(p.contactChannel)}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="px-5 py-4 text-xs text-stone-600">
-                          {lastSent?.sentAt ? formatDate(lastSent.sentAt) : "—"}
+                          {lastSent?.sentAt
+                            ? formatDate(lastSent.sentAt)
+                            : p.contactedAt
+                              ? formatDate(p.contactedAt)
+                              : "—"}
                         </td>
                         <td className="px-5 py-4">
                           {lastReply ? (
