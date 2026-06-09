@@ -9,6 +9,7 @@ export interface AuditResult {
   loadTimeMs: number | null;
   outdatedDesign: boolean;
   missingMetaDescription: boolean;
+  instagramUrl: string | null;
   issues: string[];
   opportunities: string[];
   summary: string;
@@ -24,6 +25,34 @@ const OUTDATED_PATTERNS = [
   /bootstrap-3/i,
   /copyright\s*(19[89]\d|200[0-9]|201[0-5])/i,
   /©\s*(19[89]\d|200[0-9]|201[0-5])/i,
+];
+
+const INSTAGRAM_SKIP = new Set([
+  "p",
+  "reel",
+  "reels",
+  "stories",
+  "tv",
+  "explore",
+  "accounts",
+  "about",
+  "legal",
+  "developer",
+  "help",
+  "direct",
+  "nametag",
+  "directory",
+  "privacy",
+  "terms",
+]);
+
+const EXTRA_INSTAGRAM_PATHS = [
+  "/contact",
+  "/contact/",
+  "/nous-contacter",
+  "/mentions-legales",
+  "/a-propos",
+  "/about",
 ];
 
 export async function auditWebsite(
@@ -42,6 +71,7 @@ export async function auditWebsite(
       loadTimeMs: null,
       outdatedDesign: false,
       missingMetaDescription: true,
+      instagramUrl: null,
       issues: ["Aucun site web référencé"],
       opportunities: [
         "Création de site vitrine professionnel",
@@ -89,6 +119,7 @@ export async function auditWebsite(
   } catch {
     issues.push("Site inaccessible ou timeout");
     opportunities.push("Site potentiellement down — opportunité de refonte");
+    const instagramUrl = await findInstagramOnSite(url);
     return buildResult({
       score: 80,
       hasWebsite: true,
@@ -98,10 +129,13 @@ export async function auditWebsite(
       loadTimeMs,
       outdatedDesign: false,
       missingMetaDescription: true,
+      instagramUrl,
       issues,
       opportunities,
     });
   }
+
+  const instagramUrl = await findInstagramOnSite(url, html);
 
   const $ = cheerio.load(html);
   const viewport = $('meta[name="viewport"]').attr("content");
@@ -179,10 +213,107 @@ export async function auditWebsite(
     loadTimeMs,
     outdatedDesign,
     missingMetaDescription,
+    instagramUrl,
     issues,
     opportunities,
     summary,
   });
+}
+
+function normalizeInstagramUrl(href: string): string | null {
+  try {
+    const url = new URL(href, "https://www.instagram.com");
+    const host = url.hostname.replace(/^www\./, "");
+    if (host !== "instagram.com" && host !== "instagr.am") return null;
+
+    const username = url.pathname.split("/").filter(Boolean)[0];
+    if (!username || INSTAGRAM_SKIP.has(username.toLowerCase())) return null;
+    if (!/^[a-zA-Z0-9._]+$/.test(username)) return null;
+
+    return `https://www.instagram.com/${username}/`;
+  } catch {
+    return null;
+  }
+}
+
+export function extractInstagramFromHtml(html: string): string | null {
+  const $ = cheerio.load(html);
+  const found = new Set<string>();
+
+  $('a[href*="instagram.com"], a[href*="instagr.am"]').each((_, el) => {
+    const href = $(el).attr("href");
+    if (href) {
+      const normalized = normalizeInstagramUrl(href);
+      if (normalized) found.add(normalized);
+    }
+  });
+
+  const regex =
+    /https?:\/\/(?:www\.)?instagram\.com\/([a-zA-Z0-9._]+)/gi;
+  for (const match of html.matchAll(regex)) {
+    const normalized = normalizeInstagramUrl(match[0]);
+    if (normalized) found.add(normalized);
+  }
+
+  return found.values().next().value ?? null;
+}
+
+async function findInstagramOnSite(
+  rawUrl: string,
+  homepageHtml?: string
+): Promise<string | null> {
+  let baseUrl = rawUrl.trim();
+  if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
+
+  try {
+    baseUrl = new URL(baseUrl).origin;
+  } catch {
+    return null;
+  }
+
+  if (homepageHtml) {
+    const fromHome = extractInstagramFromHtml(homepageHtml);
+    if (fromHome) return fromHome;
+  }
+
+  const urls = new Set<string>();
+  if (!homepageHtml) urls.add(baseUrl);
+  for (const path of EXTRA_INSTAGRAM_PATHS) {
+    urls.add(new URL(path, baseUrl).toString().split("#")[0]);
+  }
+
+  for (const pageUrl of urls) {
+    const html = homepageHtml && pageUrl === baseUrl ? homepageHtml : await fetchPageHtml(pageUrl);
+    if (!html) continue;
+    const instagram = extractInstagramFromHtml(html);
+    if (instagram) return instagram;
+  }
+
+  return null;
+}
+
+async function fetchPageHtml(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; ProspectCRM/1.0; +https://localhost)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const html = await res.text();
+    return html.length > 500_000 ? html.slice(0, 500_000) : html;
+  } catch {
+    return null;
+  }
 }
 
 function buildResult(partial: Omit<AuditResult, "summary"> & { summary?: string }): AuditResult {

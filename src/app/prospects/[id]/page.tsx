@@ -14,7 +14,7 @@ import {
   CONTACT_CHANNELS,
   statusBadgeClass,
 } from "@/lib/utils";
-import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2, Instagram } from "lucide-react";
 
 interface AuditDetails {
   score: number;
@@ -24,6 +24,7 @@ interface AuditDetails {
   responsive: boolean;
   loadTimeMs: number | null;
   outdatedDesign: boolean;
+  instagramUrl?: string | null;
   issues: string[];
   opportunities: string[];
   summary: string;
@@ -385,9 +386,23 @@ export default function ProspectDetailPage() {
         <div className="space-y-4 lg:col-span-2">
           {audit && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-stone-900">
-                Résultat de l&apos;audit
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-stone-900">
+                  Résultat de l&apos;audit
+                </h3>
+                {audit.instagramUrl && (
+                  <a
+                    href={audit.instagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Voir le profil Instagram"
+                    className="inline-flex items-center gap-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-500 px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    Instagram
+                  </a>
+                )}
+              </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <CheckItem label="Site web" ok={audit.hasWebsite} />
                 <CheckItem label="HTTPS" ok={audit.https} />
