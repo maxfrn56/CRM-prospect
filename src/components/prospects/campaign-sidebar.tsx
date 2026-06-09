@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { formatDate } from "@/lib/utils";
-import { FolderOpen, Plus } from "lucide-react";
+import { FolderOpen, Loader2, Plus, Trash2 } from "lucide-react";
 
 export interface Campaign {
   id: string;
@@ -18,17 +19,37 @@ interface CampaignSidebarProps {
   campaigns: Campaign[];
   selectedId: string | null;
   loading?: boolean;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 export function CampaignSidebar({
   campaigns,
   selectedId,
   loading,
+  onDelete,
 }: CampaignSidebarProps) {
   const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function selectCampaign(id: string) {
     router.push(`/prospects?campaign=${id}`);
+  }
+
+  async function handleDelete(c: Campaign) {
+    const count = c._count.prospects;
+    const message =
+      count > 0
+        ? `Supprimer « ${c.name} » ?\n\nLes ${count} prospect${count > 1 ? "s" : ""} de cette campagne seront également supprimés. Cette action est irréversible.`
+        : `Supprimer « ${c.name} » ? Cette action est irréversible.`;
+
+    if (!window.confirm(message)) return;
+
+    setDeletingId(c.id);
+    try {
+      await onDelete?.(c.id);
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -62,12 +83,15 @@ export function CampaignSidebar({
           <ul className="space-y-1">
             {campaigns.map((c) => {
               const active = c.id === selectedId;
+              const isDeleting = deletingId === c.id;
+
               return (
-                <li key={c.id}>
+                <li key={c.id} className="group flex items-start gap-0.5">
                   <button
                     type="button"
                     onClick={() => selectCampaign(c.id)}
-                    className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
+                    disabled={isDeleting}
+                    className={`min-w-0 flex-1 rounded-md px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
                       active
                         ? "bg-stone-900 text-white"
                         : "text-stone-700 hover:bg-stone-100"
@@ -91,6 +115,25 @@ export function CampaignSidebar({
                       {formatDate(c.createdAt)}
                     </p>
                   </button>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c)}
+                      disabled={isDeleting}
+                      title="Supprimer la campagne"
+                      className={`mt-2 shrink-0 rounded-md p-1.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 disabled:opacity-50 ${
+                        active
+                          ? "text-stone-400 hover:bg-stone-800 hover:text-red-300"
+                          : "text-stone-400 hover:bg-red-50 hover:text-red-600"
+                      }`}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
                 </li>
               );
             })}

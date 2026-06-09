@@ -116,12 +116,35 @@ function ProspectsContent() {
     setAuditing(false);
   }
 
+  async function deleteCampaign(id: string) {
+    const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Impossible de supprimer la campagne");
+      throw new Error("delete failed");
+    }
+
+    const updated: Campaign[] = await fetch("/api/campaigns").then((r) =>
+      r.json()
+    );
+    setCampaigns(updated);
+
+    if (campaignId === id) {
+      if (updated.length > 0) {
+        router.replace(`/prospects?campaign=${updated[0].id}`);
+      } else {
+        router.replace("/prospects");
+      }
+    }
+  }
+
   return (
     <div className="flex min-h-full">
       <CampaignSidebar
         campaigns={campaigns}
         selectedId={campaignId}
         loading={campaignsLoading}
+        onDelete={deleteCampaign}
       />
 
       <div className="flex-1 overflow-auto">
