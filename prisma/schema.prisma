@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProspectStatus {
+  NEW
+  AUDITED
+  CONTACTED
+  REPLIED
+  HOT
+  COLD
+  CONVERTED
+  ARCHIVED
+}
+
+enum EmailStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  DELIVERED
+  OPENED
+  REPLIED
+  BOUNCED
+  FAILED
+}
+
+enum EmailType {
+  INITIAL
+  FOLLOWUP_J4
+  FOLLOWUP_J7
+  FOLLOWUP_J12
+}
+
+enum ReplyClassification {
+  HOT
+  WARM
+  COLD
+  OUT_OF_OFFICE
+  BOUNCE
+  UNKNOWN
+}
+
+model SearchCampaign {
+  id        String     @id @default(cuid())
+  name      String
+  sector    String
+  city      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  prospects Prospect[]
+}
+
+model Prospect {
+  id              String         @id @default(cuid())
+  campaignId      String?
+  campaign        SearchCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  // Source Google Places + enrichissement SIRENE/Pappers
+  googlePlaceId   String?        @unique
+  pjId            String?        // legacy
+  name            String
+  activity        String?
+  address         String?
+  city            String?
+  postalCode      String?
+  phone           String?
+  email           String?
+  website         String?
+  rating          Float?
+  reviewCount     Int?
+  googleMapsUrl   String?
+  pjUrl           String?        // legacy
+
+  // Données légales (SIRENE / Pappers)
+  siren           String?
+  siret           String?
+  nafCode         String?
+  nafLabel        String?
+  legalName       String?
+  directorName    String?
+  employeeRange   String?
+  enrichmentSource String?
+
+  // Audit
+  auditScore      Int            @default(0)
+  auditDetails    String?        // JSON string
+  auditedAt       DateTime?
+
+  status          ProspectStatus @default(NEW)
+  replyClass      ReplyClassification?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  emails          Email[]
+  replies         EmailReply[]
+
+  @@index([auditScore])
+  @@index([status])
+  @@index([campaignId])
+}
+
+model Email {
+  id              String      @id @default(cuid())
+  prospectId      String
+  prospect        Prospect    @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  type            EmailType
+  subject         String
+  bodyHtml        String
+  bodyText        String?
+
+  status          EmailStatus @default(DRAFT)
+  resendId        String?
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+
+  followupDay     Int?        // 0 = initial, 4, 7, 12
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  replies         EmailReply[]
+
+  @@index([prospectId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model EmailReply {
+  id              String              @id @default(cuid())
+  prospectId      String
+  prospect        Prospect            @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  emailId         String?
+  email           Email?              @relation(fields: [emailId], references: [id], onDelete: SetNull)
+
+  resendEmailId   String?
+  fromAddress     String
+  subject         String?
+  bodyText        String
+  bodyHtml        String?
+
+  classification  ReplyClassification @default(UNKNOWN)
+  aiSummary       String?
+  aiConfidence    Float?
+
+  receivedAt      DateTime            @default(now())
+
+  @@index([prospectId])
+}
+
+model AppSettings {
+  id              String   @id @default("default")
+  senderName      String   @default("Maxime Farineau")
+  senderEmail     String   @default("")
+  companyName     String   @default("Développeur Web Full Stack")
+  pitchContext    String   @default("Je propose des services de création et refonte de sites web modernes, performants et responsives.")
+  followupEnabled Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}

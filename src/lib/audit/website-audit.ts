@@ -1,0 +1,195 @@
+import * as cheerio from "cheerio";
+
+export interface AuditResult {
+  score: number;
+  hasWebsite: boolean;
+  websiteUrl: string | null;
+  https: boolean;
+  responsive: boolean;
+  loadTimeMs: number | null;
+  outdatedDesign: boolean;
+  missingMetaDescription: boolean;
+  issues: string[];
+  opportunities: string[];
+  summary: string;
+}
+
+const OUTDATED_PATTERNS = [
+  /table[^>]*layout/i,
+  /font[^>]*face/i,
+  /marquee/i,
+  /blink/i,
+  /frameset/i,
+  /jquery-1\.[0-9]/i,
+  /bootstrap-3/i,
+  /copyright\s*(19[89]\d|200[0-9]|201[0-5])/i,
+  /©\s*(19[89]\d|200[0-9]|201[0-5])/i,
+];
+
+export async function auditWebsite(
+  rawUrl: string | null | undefined
+): Promise<AuditResult> {
+  const issues: string[] = [];
+  const opportunities: string[] = [];
+
+  if (!rawUrl || rawUrl.trim() === "") {
+    return {
+      score: 95,
+      hasWebsite: false,
+      websiteUrl: null,
+      https: false,
+      responsive: false,
+      loadTimeMs: null,
+      outdatedDesign: false,
+      missingMetaDescription: true,
+      issues: ["Aucun site web référencé"],
+      opportunities: [
+        "Création de site vitrine professionnel",
+        "Présence en ligne inexistante — forte opportunité commerciale",
+      ],
+      summary: "Pas de site web — prospect très pertinent pour une création de site.",
+    };
+  }
+
+  let url = rawUrl.trim();
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  let finalUrl = url;
+  let html = "";
+  let loadTimeMs: number | null = null;
+  let https = url.startsWith("https://");
+
+  try {
+    const start = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; ProspectCRM/1.0; +https://localhost)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    clearTimeout(timeout);
+
+    loadTimeMs = Date.now() - start;
+    finalUrl = res.url;
+    https = finalUrl.startsWith("https://");
+    html = await res.text();
+
+    if (!res.ok) {
+      issues.push(`Site inaccessible (HTTP ${res.status})`);
+      opportunities.push("Site en panne ou mal configuré — refonte recommandée");
+    }
+  } catch {
+    issues.push("Site inaccessible ou timeout");
+    opportunities.push("Site potentiellement down — opportunité de refonte");
+    return buildResult({
+      score: 80,
+      hasWebsite: true,
+      websiteUrl: url,
+      https,
+      responsive: false,
+      loadTimeMs,
+      outdatedDesign: false,
+      missingMetaDescription: true,
+      issues,
+      opportunities,
+    });
+  }
+
+  const $ = cheerio.load(html);
+  const viewport = $('meta[name="viewport"]').attr("content");
+  const responsive = Boolean(viewport && viewport.includes("width"));
+  const metaDesc = $('meta[name="description"]').attr("content");
+  const missingMetaDescription = !metaDesc || metaDesc.length < 20;
+
+  const bodyText = $("body").text().toLowerCase();
+  const htmlSource = html.toLowerCase();
+  const outdatedDesign = OUTDATED_PATTERNS.some(
+    (p) => p.test(htmlSource) || p.test(bodyText)
+  );
+
+  if (!https) {
+    issues.push("Pas de certificat HTTPS");
+    opportunities.push("Migration HTTPS + sécurisation");
+  }
+
+  if (!responsive) {
+    issues.push("Site non responsive (pas de viewport mobile)");
+    opportunities.push("Refonte responsive mobile-first");
+  }
+
+  if (loadTimeMs !== null && loadTimeMs > 3000) {
+    issues.push(`Temps de chargement lent (${(loadTimeMs / 1000).toFixed(1)}s)`);
+    opportunities.push("Optimisation des performances");
+  }
+
+  if (outdatedDesign) {
+    issues.push("Design daté détecté");
+    opportunities.push("Modernisation du design et de l'UX");
+  }
+
+  if (missingMetaDescription) {
+    issues.push("Meta description absente ou trop courte");
+    opportunities.push("Optimisation SEO de base");
+  }
+
+  const title = $("title").text().trim();
+  if (!title || title.length < 10) {
+    issues.push("Balise title absente ou trop courte");
+  }
+
+  const inlineStyles = $("[style]").length;
+  if (inlineStyles > 30) {
+    issues.push("Nombreuses styles inline — code legacy probable");
+  }
+
+  let score = 0;
+  if (!https) score += 25;
+  if (!responsive) score += 25;
+  if (outdatedDesign) score += 20;
+  if (missingMetaDescription) score += 10;
+  if (loadTimeMs !== null && loadTimeMs > 3000) score += 10;
+  if (issues.some((i) => i.includes("inaccessible"))) score += 15;
+  score = Math.min(100, score);
+
+  if (issues.length === 0) {
+    opportunities.push("Site correct — proposer audit approfondi ou maintenance");
+  }
+
+  const summary =
+    score >= 70
+      ? `Fort potentiel (${score}/100) : ${issues.slice(0, 2).join(", ") || "plusieurs axes d'amélioration"}.`
+      : score >= 40
+        ? `Potentiel modéré (${score}/100) : quelques optimisations possibles.`
+        : `Faible priorité (${score}/100) : site déjà en bon état.`;
+
+  return buildResult({
+    score,
+    hasWebsite: true,
+    websiteUrl: finalUrl,
+    https,
+    responsive,
+    loadTimeMs,
+    outdatedDesign,
+    missingMetaDescription,
+    issues,
+    opportunities,
+    summary,
+  });
+}
+
+function buildResult(partial: Omit<AuditResult, "summary"> & { summary?: string }): AuditResult {
+  return {
+    ...partial,
+    summary:
+      partial.summary ??
+      `Score ${partial.score}/100 — ${partial.issues.length} problème(s) détecté(s).`,
+  };
+}
