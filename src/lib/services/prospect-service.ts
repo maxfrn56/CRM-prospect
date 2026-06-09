@@ -3,7 +3,7 @@ import { auditWebsite, type AuditResult } from "@/lib/audit/website-audit";
 import { generateProspectionEmail } from "@/lib/llm/gemini";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
-import { enrichBusiness } from "@/lib/enrichment";
+import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
 import type { EmailType, ProspectStatus } from "@prisma/client";
 
 const FOLLOWUP_DAYS = [4, 7, 12] as const;
@@ -13,11 +13,26 @@ export async function auditProspect(prospectId: string) {
     where: { id: prospectId },
   });
 
+  let email = prospect.email;
+  let enrichmentSource = prospect.enrichmentSource;
+
+  if (!email && prospect.website) {
+    const found = await findEmailForProspect(prospect.website);
+    if (found.email) {
+      email = found.email;
+      enrichmentSource = enrichmentSource
+        ? `${enrichmentSource}+email-finder`
+        : "email-finder";
+    }
+  }
+
   const audit = await auditWebsite(prospect.website);
 
   await prisma.prospect.update({
     where: { id: prospectId },
     data: {
+      email,
+      enrichmentSource,
       auditScore: audit.score,
       auditDetails: JSON.stringify(audit),
       auditedAt: new Date(),
@@ -25,7 +40,7 @@ export async function auditProspect(prospectId: string) {
     },
   });
 
-  return audit;
+  return { audit, emailFound: Boolean(email && !prospect.email) };
 }
 
 export async function auditAllInCampaign(campaignId: string) {
@@ -33,10 +48,14 @@ export async function auditAllInCampaign(campaignId: string) {
     where: { campaignId, status: "NEW" },
   });
 
-  const results: { id: string; score: number }[] = [];
+  const results: { id: string; score: number; emailFound?: boolean }[] = [];
   for (const p of prospects) {
-    const audit = await auditProspect(p.id);
-    results.push({ id: p.id, score: audit.score });
+    const result = await auditProspect(p.id);
+    results.push({
+      id: p.id,
+      score: result.audit.score,
+      emailFound: result.emailFound,
+    });
     await sleep(500);
   }
   return results;

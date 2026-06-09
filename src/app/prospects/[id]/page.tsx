@@ -172,9 +172,18 @@ export default function ProspectDetailPage() {
                   <Phone className="h-3.5 w-3.5" /> {prospect.phone}
                 </li>
               )}
-              {prospect.email && (
+              {prospect.email ? (
                 <li className="flex items-center gap-2">
                   <Mail className="h-3.5 w-3.5" /> {prospect.email}
+                  {prospect.enrichmentSource?.includes("email-finder") && (
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                      trouvé sur le site
+                    </span>
+                  )}
+                </li>
+              ) : (
+                <li className="text-xs text-stone-400">
+                  Email non trouvé — lancez l&apos;audit pour chercher sur le site
                 </li>
               )}
               {prospect.website && (

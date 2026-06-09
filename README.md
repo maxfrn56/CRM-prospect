@@ -118,6 +118,7 @@ En production sur Railway, planifier un cron HTTP vers `/api/cron/followups`.
 
 ## Note sur les emails prospects
 
-Google Places ne fournit pas d'email. SIRENE non plus. Pour obtenir des emails :
-- Configurez `PAPPERS_API_KEY` (plan payant)
-- Ou saisissez-les manuellement dans la fiche prospect
+Google Places ne fournit pas d'email. L'**EmailFinder** parcourt automatiquement le site web (contact, mentions légales…) à l'import et lors de l'audit.
+
+- Configurez `PAPPERS_API_KEY` (optionnel) pour un complément payant
+- Ou saisissez l'email manuellement dans la fiche prospect

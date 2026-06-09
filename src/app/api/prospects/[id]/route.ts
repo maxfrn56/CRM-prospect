@@ -4,6 +4,7 @@ import {
   generateAndSaveEmail,
   sendProspectEmail,
 } from "@/lib/services/prospect-service";
+import { findEmailForProspect } from "@/lib/enrichment";
 import { prisma } from "@/lib/db";
 
 type Params = { params: Promise<{ id: string }> };
@@ -34,8 +35,32 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     switch (action) {
       case "audit": {
-        const audit = await auditProspect(id);
-        return NextResponse.json({ audit });
+        const result = await auditProspect(id);
+        return NextResponse.json(result);
+      }
+      case "find-email": {
+        const prospect = await prisma.prospect.findUniqueOrThrow({
+          where: { id },
+        });
+        if (!prospect.website) {
+          return NextResponse.json(
+            { error: "Aucun site web pour ce prospect" },
+            { status: 400 }
+          );
+        }
+        const found = await findEmailForProspect(prospect.website);
+        if (found.email) {
+          await prisma.prospect.update({
+            where: { id },
+            data: {
+              email: found.email,
+              enrichmentSource: prospect.enrichmentSource
+                ? `${prospect.enrichmentSource}+email-finder`
+                : "email-finder",
+            },
+          });
+        }
+        return NextResponse.json(found);
       }
       case "generate-email": {
         const email = await generateAndSaveEmail(id, "INITIAL");

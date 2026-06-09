@@ -1,5 +1,6 @@
 import { enrichFromSirene } from "./sirene";
 import { enrichFromPappers } from "./pappers";
+import { findEmailOnWebsite } from "@/lib/email-finder/website-email-finder";
 import type { BusinessResult } from "@/lib/google-places/client";
 
 export interface EnrichedBusiness extends BusinessResult {
@@ -11,6 +12,8 @@ export interface EnrichedBusiness extends BusinessResult {
   directorName?: string;
   employeeRange?: string;
   enrichmentSource?: string;
+  emailFoundOn?: string;
+  emailConfidence?: number;
 }
 
 export async function enrichBusiness(
@@ -56,5 +59,21 @@ export async function enrichBusiness(
     };
   }
 
+  if (!enriched.email && enriched.website) {
+    const found = await findEmailOnWebsite(enriched.website);
+    if (found.email) {
+      enriched.email = found.email;
+      enriched.emailFoundOn = found.foundOn ?? undefined;
+      enriched.emailConfidence = found.confidence;
+      enriched.enrichmentSource = enriched.enrichmentSource
+        ? `${enriched.enrichmentSource}+email-finder`
+        : "email-finder";
+    }
+  }
+
   return enriched;
+}
+
+export async function findEmailForProspect(website: string | null | undefined) {
+  return findEmailOnWebsite(website);
 }
