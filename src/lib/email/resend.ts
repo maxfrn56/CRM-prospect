@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { Webhook } from "svix";
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -13,11 +14,17 @@ export interface SendEmailInput {
   text?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
+  headers?: Record<string, string>;
 }
 
 export async function sendEmail(input: SendEmailInput) {
   const from = process.env.RESEND_FROM_EMAIL;
   if (!from) throw new Error("RESEND_FROM_EMAIL manquant");
+
+  const replyTo =
+    input.replyTo ??
+    process.env.RESEND_REPLY_TO ??
+    process.env.RESEND_FROM_EMAIL;
 
   const resend = getResend();
   const { data, error } = await resend.emails.send({
@@ -26,8 +33,9 @@ export async function sendEmail(input: SendEmailInput) {
     subject: input.subject,
     html: input.html,
     text: input.text,
-    replyTo: input.replyTo,
+    replyTo,
     tags: input.tags,
+    headers: input.headers,
   });
 
   if (error) throw new Error(error.message);
@@ -58,20 +66,40 @@ export async function fetchReceivedEmail(emailId: string) {
   }>;
 }
 
-export function verifyWebhookSignature(
+export function verifyWebhookPayload(
   payload: string,
   headers: Headers
-): boolean {
+): Record<string, unknown> {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret) return process.env.NODE_ENV === "development";
+  if (!secret) {
+    if (process.env.NODE_ENV === "development") {
+      return JSON.parse(payload) as Record<string, unknown>;
+    }
+    throw new Error("RESEND_WEBHOOK_SECRET manquant");
+  }
 
-  const svixId = headers.get("svix-id");
-  const svixTimestamp = headers.get("svix-timestamp");
-  const svixSignature = headers.get("svix-signature");
+  const wh = new Webhook(secret);
+  return wh.verify(payload, {
+    "svix-id": headers.get("svix-id") ?? "",
+    "svix-timestamp": headers.get("svix-timestamp") ?? "",
+    "svix-signature": headers.get("svix-signature") ?? "",
+  }) as Record<string, unknown>;
+}
 
-  if (!svixId || !svixTimestamp || !svixSignature) return false;
+export function extractEmailAddress(raw: string): string {
+  const match = raw.match(/<([^>]+)>/);
+  const email = (match?.[1] ?? raw).trim().toLowerCase();
+  return email;
+}
 
-  // En production, utiliser resend.webhooks.verify() côté SDK
-  // Ici on vérifie la présence du secret configuré
-  return Boolean(secret);
+export function appendProspectTracking(
+  html: string,
+  prospectId: string,
+  emailId: string
+): string {
+  const marker = `<div style="display:none;font-size:0;line-height:0;max-height:0;overflow:hidden" data-prospect-id="${prospectId}" data-email-id="${emailId}"></div>`;
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${marker}</body>`);
+  }
+  return `${html}${marker}`;
 }

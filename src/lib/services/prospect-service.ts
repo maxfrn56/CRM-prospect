@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { auditWebsite, type AuditResult } from "@/lib/audit/website-audit";
 import { generateProspectionEmail } from "@/lib/llm/gemini";
-import { sendEmail } from "@/lib/email/resend";
+import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness } from "@/lib/enrichment";
 import type { EmailType, ProspectStatus } from "@prisma/client";
@@ -100,7 +100,11 @@ export async function sendProspectEmail(emailId: string) {
   const result = await sendEmail({
     to: email.prospect.email,
     subject: email.subject,
-    html: email.bodyHtml,
+    html: appendProspectTracking(
+      email.bodyHtml,
+      email.prospectId,
+      email.id
+    ),
     text: email.bodyText ?? undefined,
     tags: [
       { name: "prospect_id", value: email.prospectId },

@@ -50,13 +50,41 @@ Le build exécute `next build`. Le schéma Prisma est appliqué au **démarrage*
 > `postgresql://postgres:xxx@xxx.railway.app:5432/railway`  
 > **Pas** `localhost:5432` — celle-ci est réservée au dev local avec Docker.
 
-### Webhook Resend
+### Webhook Resend (réponses automatiques)
 
-Une fois déployé :
+#### 1. Activer la réception sur ton domaine
+1. [Resend → Domains](https://resend.com/domains) → ton domaine vérifié
+2. Active **Inbound** (Receiving)
+3. `RESEND_FROM_EMAIL` doit être une adresse de **ce domaine** (ex. `prospection@tondomaine.fr`)
+
+#### 2. Créer le webhook
+1. [Resend → Webhooks](https://resend.com/webhooks) → **Add webhook**
+2. **Endpoint URL** :
+   ```
+   https://TON-URL-RAILWAY/api/webhooks/resend
+   ```
+3. Événement : **`email.received`** (section Emails)
+4. Copie le **Signing secret** (`whsec_...`)
+
+#### 3. Variables Railway
 ```
-https://VOTRE-APP.railway.app/api/webhooks/resend
+RESEND_WEBHOOK_SECRET=whsec_...
+RESEND_FROM_EMAIL=prospection@tondomaine.fr
+RESEND_REPLY_TO=prospection@tondomaine.fr
+NEXT_PUBLIC_APP_URL=https://ton-url.railway.app
 ```
-Événement : `email.received`
+
+#### 4. Vérifier que l'endpoint répond
+Ouvre dans le navigateur :
+```
+https://TON-URL-RAILWAY/api/webhooks/resend
+```
+Tu dois voir : `{"ok":true,"service":"resend-webhook",...}`
+
+#### 5. Tester
+1. Envoie un email à un prospect depuis le CRM
+2. Réponds à cet email depuis ta boîte prospect
+3. Le statut du prospect doit passer à **Chaud / Répondu / Froid** automatiquement
 
 ## Variables d'environnement
 
