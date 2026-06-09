@@ -8,6 +8,7 @@ import {
   Users,
   Settings,
   Mail,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,7 @@ const nav = [
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/search", label: "Recherche", icon: Search },
   { href: "/prospects", label: "Prospects", icon: Users },
+  { href: "/outreach", label: "Suivi envois", icon: Send },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 

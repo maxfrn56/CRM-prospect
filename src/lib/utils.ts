@@ -51,3 +51,38 @@ export function replyClassLabel(c: string): string {
   };
   return labels[c] ?? c;
 }
+
+export function emailTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    INITIAL: "Mail initial",
+    FOLLOWUP_J4: "Relance J+4",
+    FOLLOWUP_J7: "Relance J+7",
+    FOLLOWUP_J12: "Relance J+12",
+  };
+  return labels[type] ?? type;
+}
+
+export const OUTREACH_STEPS = [
+  "INITIAL",
+  "FOLLOWUP_J4",
+  "FOLLOWUP_J7",
+  "FOLLOWUP_J12",
+] as const;
+
+export function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "HOT":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "CONTACTED":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    case "REPLIED":
+    case "WARM":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "COLD":
+      return "border-stone-200 bg-stone-100 text-stone-600";
+    case "CONVERTED":
+      return "border-emerald-300 bg-emerald-100 text-emerald-800";
+    default:
+      return "border-stone-200 bg-stone-50 text-stone-600";
+  }
+}
