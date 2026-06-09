@@ -33,18 +33,22 @@ npm run dev
 ## Déploiement Railway
 
 1. **New Project** → Deploy from GitHub → `maxfrn56/CRM-prospect`
-2. Ajouter un service **PostgreSQL** dans le projet
-3. Lier la variable `DATABASE_URL` du service Postgres à l'app Next.js
-4. Ajouter les autres variables d'environnement (voir `.env.example`)
-5. Définir `NEXT_PUBLIC_APP_URL` avec l'URL Railway générée
+2. **Ajouter PostgreSQL** : dans le projet → `+ New` → `Database` → `PostgreSQL`
+3. **Lier la base à l'app** (étape critique) :
+   - Ouvre le service **Next.js** (pas Postgres)
+   - Onglet **Variables**
+   - **Supprime** toute variable `DATABASE_URL` qui contient `localhost` (copiée depuis ton `.env` local)
+   - Clique **New Variable** → **Add Reference**
+   - Sélectionne le service **PostgreSQL** → variable **`DATABASE_URL`**
+   - Sauvegarde
+4. Ajoute les autres variables **manuellement** (API keys, etc.) — ne copie pas tout le `.env` tel quel
+5. Définir `NEXT_PUBLIC_APP_URL` avec l'URL Railway générée (Settings → Networking → Generate Domain)
 
 Le build exécute `next build`. Le schéma Prisma est appliqué au **démarrage** (`prisma db push`).
 
-### Variables obligatoires avant le déploiement
-
-1. Ajouter PostgreSQL dans le projet Railway
-2. **Lier `DATABASE_URL`** du service Postgres vers l'app Next.js (Variables → Add Reference)
-3. Redéployer — sans `DATABASE_URL`, le build passera mais le **start** échouera
+> **Important** : la `DATABASE_URL` Railway ressemble à  
+> `postgresql://postgres:xxx@xxx.railway.app:5432/railway`  
+> **Pas** `localhost:5432` — celle-ci est réservée au dev local avec Docker.
 
 ### Webhook Resend
 
