@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { auditWebsite, type AuditResult } from "@/lib/audit/website-audit";
-import { generateProspectionEmail } from "@/lib/llm/gemini";
+import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
@@ -78,17 +78,27 @@ export async function generateAndSaveEmail(
     ? JSON.parse(prospect.auditDetails)
     : await auditWebsite(prospect.website);
 
-  const generated = await generateProspectionEmail({
-    prospectName: prospect.name,
-    activity: prospect.activity ?? undefined,
-    city: prospect.city ?? undefined,
-    audit,
-    senderName: settings.senderName,
-    companyName: settings.companyName,
-    pitchContext: settings.pitchContext,
-    emailType: type,
-    directorName: prospect.directorName ?? undefined,
-  });
+  const generated = appendSignatureToEmail(
+    await generateProspectionEmail({
+      prospectName: prospect.name,
+      activity: prospect.activity ?? undefined,
+      city: prospect.city ?? undefined,
+      audit,
+      senderName: settings.senderName,
+      companyName: settings.companyName,
+      pitchContext: settings.pitchContext,
+      pitchExample: settings.pitchExample || undefined,
+      emailType: type,
+      directorName: prospect.directorName ?? undefined,
+    }),
+    {
+      senderName: settings.senderName,
+      companyName: settings.companyName,
+      phone: settings.phone || undefined,
+      website: settings.website || undefined,
+      senderEmail: settings.senderEmail || undefined,
+    }
+  );
 
   const followupDay =
     type === "INITIAL" ? 0 : parseInt(type.replace("FOLLOWUP_J", ""), 10);

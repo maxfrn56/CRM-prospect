@@ -160,6 +160,9 @@ model AppSettings {
   senderEmail     String   @default("")
   companyName     String   @default("Développeur Web Full Stack")
   pitchContext    String   @default("Je propose des services de création et refonte de sites web modernes, performants et responsives.")
+  pitchExample    String   @default("")
+  website         String   @default("")
+  phone           String   @default("")
   followupEnabled Boolean  @default(true)
   updatedAt       DateTime @updatedAt
 }

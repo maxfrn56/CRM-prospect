@@ -4,11 +4,22 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, Button } from "@/components/ui";
 import { CheckCircle2 } from "lucide-react";
 
+const DEFAULT_PITCH_EXAMPLE = `Bonjour,
+
+Je suis développeur web full stack et j'accompagne des entreprises locales pour moderniser leur présence en ligne.
+
+En regardant votre activité, j'ai remarqué que votre site pourrait gagner en clarté et en performance sur mobile — deux points qui font souvent la différence pour convertir de nouveaux clients.
+
+Je serais ravi d'échanger 15 minutes avec vous pour voir si je peux vous aider, sans engagement de votre part.`;
+
 interface Settings {
   senderName: string;
   senderEmail: string;
   companyName: string;
   pitchContext: string;
+  pitchExample: string;
+  website: string;
+  phone: string;
   followupEnabled: boolean;
 }
 
@@ -18,6 +29,9 @@ export default function SettingsPage() {
     senderEmail: "",
     companyName: "",
     pitchContext: "",
+    pitchExample: "",
+    website: "",
+    phone: "",
     followupEnabled: true,
   });
   const [saved, setSaved] = useState(false);
@@ -26,9 +40,8 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((data) => setSettings({ ...settings, ...data }))
+      .then((data) => setSettings((prev) => ({ ...prev, ...data })))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSave(e: React.FormEvent) {
@@ -56,37 +69,115 @@ export default function SettingsPage() {
       <div className="mx-auto max-w-2xl space-y-6 p-8">
         <Card className="p-6">
           <h2 className="text-sm font-semibold text-stone-900">
-            Identité expéditeur
+            Identité & signature
           </h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Ces informations apparaissent en signature dans chaque email envoyé.
+          </p>
           <form onSubmit={handleSave} className="mt-4 space-y-4">
             <Field
               label="Votre nom"
               value={settings.senderName}
               onChange={(v) => setSettings({ ...settings, senderName: v })}
+              placeholder="Maxime Farineau"
             />
             <Field
               label="Email de réponse"
               value={settings.senderEmail}
               onChange={(v) => setSettings({ ...settings, senderEmail: v })}
+              placeholder="contact@votredomaine.fr"
             />
             <Field
               label="Nom de l'activité"
               value={settings.companyName}
               onChange={(v) => setSettings({ ...settings, companyName: v })}
+              placeholder="Développeur Web Full Stack"
             />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Site internet"
+                value={settings.website}
+                onChange={(v) => setSettings({ ...settings, website: v })}
+                placeholder="https://monsite.fr"
+              />
+              <Field
+                label="Téléphone"
+                value={settings.phone}
+                onChange={(v) => setSettings({ ...settings, phone: v })}
+                placeholder="06 12 34 56 78"
+              />
+            </div>
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
-                Contexte / pitch
+                Pitch / services (contexte pour Gemini)
               </label>
               <textarea
                 value={settings.pitchContext}
                 onChange={(e) =>
                   setSettings({ ...settings, pitchContext: e.target.value })
                 }
-                rows={4}
+                rows={3}
+                placeholder="Je crée et refonds des sites web modernes, performants et responsives pour les TPE/PME..."
                 className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
               />
             </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-sm font-medium text-stone-700">
+                  Exemple de pitch (modèle pour Gemini)
+                </label>
+                {!settings.pitchExample && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettings({
+                        ...settings,
+                        pitchExample: DEFAULT_PITCH_EXAMPLE,
+                      })
+                    }
+                    className="text-xs text-stone-500 underline hover:text-stone-800"
+                  >
+                    Utiliser l&apos;exemple par défaut
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={settings.pitchExample}
+                onChange={(e) =>
+                  setSettings({ ...settings, pitchExample: e.target.value })
+                }
+                rows={8}
+                placeholder="Collez ici un email type que Gemini reproduira en ton et structure..."
+                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+              />
+              <p className="mt-1.5 text-xs text-stone-400">
+                Gemini s&apos;inspire de ce modèle pour le ton et la structure,
+                puis personnalise selon l&apos;audit de chaque prospect.
+              </p>
+            </div>
+
+            {(settings.senderName || settings.website || settings.phone) && (
+              <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase text-stone-500">
+                  Aperçu signature
+                </p>
+                <div className="mt-2 text-sm text-stone-700">
+                  <p>Cordialement,</p>
+                  <p className="font-medium">{settings.senderName || "—"}</p>
+                  <p>{settings.companyName || "—"}</p>
+                  {settings.phone && <p>Tél. {settings.phone}</p>}
+                  {settings.website && (
+                    <p className="text-stone-600">{settings.website}</p>
+                  )}
+                  {settings.senderEmail && (
+                    <p className="text-stone-600">{settings.senderEmail}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <label className="flex items-center gap-2 text-sm text-stone-700">
               <input
                 type="checkbox"
@@ -128,24 +219,8 @@ export default function SettingsPage() {
               desc="Google Gemini — génération emails et classification"
             />
             <EnvItem
-              name="GEMINI_MODEL"
-              desc="Modèle Gemini (défaut: gemini-2.5-flash)"
-            />
-            <EnvItem
-              name="RESEND_API_KEY"
-              desc="Envoi et réception d'emails"
-            />
-            <EnvItem
               name="RESEND_FROM_EMAIL"
-              desc="Adresse d'envoi vérifiée (ex: prospection@votredomaine.com)"
-            />
-            <EnvItem
-              name="PAPPERS_API_KEY"
-              desc="Optionnel — enrichissement email/téléphone (api.pappers.fr)"
-            />
-            <EnvItem
-              name="CRON_SECRET"
-              desc="Protection de l'endpoint /api/cron/followups"
+              desc="Adresse d'envoi vérifiée Resend"
             />
           </ul>
         </Card>
@@ -158,10 +233,12 @@ function Field({
   label,
   value,
   onChange,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -172,6 +249,7 @@ function Field({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
         className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
       />
     </div>
