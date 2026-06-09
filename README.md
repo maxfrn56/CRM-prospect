@@ -38,7 +38,13 @@ npm run dev
 4. Ajouter les autres variables d'environnement (voir `.env.example`)
 5. Définir `NEXT_PUBLIC_APP_URL` avec l'URL Railway générée
 
-Le build exécute automatiquement `prisma db push` puis `next build`.
+Le build exécute `next build`. Le schéma Prisma est appliqué au **démarrage** (`prisma db push`).
+
+### Variables obligatoires avant le déploiement
+
+1. Ajouter PostgreSQL dans le projet Railway
+2. **Lier `DATABASE_URL`** du service Postgres vers l'app Next.js (Variables → Add Reference)
+3. Redéployer — sans `DATABASE_URL`, le build passera mais le **start** échouera
 
 ### Webhook Resend
 

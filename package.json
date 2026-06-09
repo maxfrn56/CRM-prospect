@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "prisma generate",
-    "build": "prisma db push --skip-generate && next build",
-    "start": "next start",
+    "postinstall": "sh scripts/prisma-generate.sh",
+    "build": "next build",
+    "start": "sh scripts/railway-start.sh",
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
