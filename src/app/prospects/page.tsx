@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, Card, Badge, Button, EmptyState } from "@/components/ui";
 import { scoreColor, statusLabel } from "@/lib/utils";
-import { ArrowUpDown, ExternalLink } from "lucide-react";
+import { ArrowUpDown, ExternalLink, Loader2 } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -24,31 +24,66 @@ interface Prospect {
 function ProspectsContent() {
   const searchParams = useSearchParams();
   const campaignId = searchParams.get("campaign");
+  const isImporting = searchParams.get("importing") === "1";
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditing, setAuditing] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [importStatus, setImportStatus] = useState<string | null>(
+    isImporting ? "Import en cours…" : null
+  );
 
-  useEffect(() => {
+  const loadProspects = useCallback(() => {
     const params = new URLSearchParams();
     if (campaignId) params.set("campaignId", campaignId);
     if (filter !== "all") params.set("status", filter);
 
-    fetch(`/api/prospects?${params}`)
+    return fetch(`/api/prospects?${params}`)
       .then((r) => r.json())
-      .then(setProspects)
-      .finally(() => setLoading(false));
+      .then(setProspects);
   }, [campaignId, filter]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadProspects().finally(() => setLoading(false));
+  }, [loadProspects]);
+
+  useEffect(() => {
+    if (!isImporting || !campaignId) return;
+
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/campaigns/${campaignId}`);
+        const data = await res.json();
+        await loadProspects();
+
+        if (data.prospectCount > 0) {
+          setImportStatus(`${data.prospectCount} prospect(s) importé(s)`);
+          clearInterval(interval);
+          setTimeout(() => setImportStatus(null), 4000);
+        } else if (attempts >= maxAttempts) {
+          setImportStatus(
+            "Import terminé ou en cours — actualisez si la liste est vide"
+          );
+          clearInterval(interval);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isImporting, campaignId, loadProspects]);
 
   async function auditAll() {
     if (!campaignId) return;
     setAuditing(true);
     await fetch(`/api/campaigns/${campaignId}/audit`, { method: "POST" });
-    const params = new URLSearchParams({ campaignId });
-    const updated = await fetch(`/api/prospects?${params}`).then((r) =>
-      r.json()
-    );
-    setProspects(updated);
+    await loadProspects();
     setAuditing(false);
   }
 
@@ -62,7 +97,7 @@ function ProspectsContent() {
           <Button
             variant="secondary"
             onClick={auditAll}
-            disabled={auditing}
+            disabled={auditing || loading}
           >
             {auditing ? "Audit en cours…" : "Auditer tous"}
           </Button>
@@ -70,6 +105,13 @@ function ProspectsContent() {
       </PageHeader>
 
       <div className="p-8">
+        {importStatus && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {importStatus}
+          </div>
+        )}
+
         <div className="mb-4 flex gap-2">
           {[
             { key: "all", label: "Tous" },
@@ -95,7 +137,13 @@ function ProspectsContent() {
           {loading ? (
             <div className="p-8 text-sm text-stone-500">Chargement…</div>
           ) : prospects.length === 0 ? (
-            <EmptyState message="Aucun prospect. Lancez une recherche." />
+            <EmptyState
+              message={
+                isImporting
+                  ? "Import en cours, les prospects arrivent…"
+                  : "Aucun prospect. Lancez une recherche."
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

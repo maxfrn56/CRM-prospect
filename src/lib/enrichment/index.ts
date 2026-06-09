@@ -16,8 +16,15 @@ export interface EnrichedBusiness extends BusinessResult {
   emailConfidence?: number;
 }
 
+export interface EnrichOptions {
+  /** Désactivé à l'import pour éviter les timeouts — activé à l'audit */
+  skipEmailFinder?: boolean;
+  skipPappers?: boolean;
+}
+
 export async function enrichBusiness(
-  business: BusinessResult
+  business: BusinessResult,
+  options: EnrichOptions = {}
 ): Promise<EnrichedBusiness> {
   const sirene = await enrichFromSirene({
     name: business.name,
@@ -37,29 +44,31 @@ export async function enrichBusiness(
     enrichmentSource: sirene.matched ? "sirene" : undefined,
   };
 
-  const pappers = await enrichFromPappers({
-    name: business.name,
-    siren: sirene.siren,
-    city: business.city,
-  });
+  if (!options.skipPappers) {
+    const pappers = await enrichFromPappers({
+      name: business.name,
+      siren: sirene.siren,
+      city: business.city,
+    });
 
-  if (pappers.matched) {
-    enriched = {
-      ...enriched,
-      email: enriched.email ?? pappers.email,
-      phone: enriched.phone ?? pappers.phone,
-      website: enriched.website ?? pappers.website,
-      siren: enriched.siren ?? pappers.siren,
-      siret: enriched.siret ?? pappers.siret,
-      employeeRange: enriched.employeeRange ?? pappers.effectif,
-      directorName: enriched.directorName ?? pappers.dirigeant,
-      enrichmentSource: enriched.enrichmentSource
-        ? `${enriched.enrichmentSource}+pappers`
-        : "pappers",
-    };
+    if (pappers.matched) {
+      enriched = {
+        ...enriched,
+        email: enriched.email ?? pappers.email,
+        phone: enriched.phone ?? pappers.phone,
+        website: enriched.website ?? pappers.website,
+        siren: enriched.siren ?? pappers.siren,
+        siret: enriched.siret ?? pappers.siret,
+        employeeRange: enriched.employeeRange ?? pappers.effectif,
+        directorName: enriched.directorName ?? pappers.dirigeant,
+        enrichmentSource: enriched.enrichmentSource
+          ? `${enriched.enrichmentSource}+pappers`
+          : "pappers",
+      };
+    }
   }
 
-  if (!enriched.email && enriched.website) {
+  if (!options.skipEmailFinder && !enriched.email && enriched.website) {
     const found = await findEmailOnWebsite(enriched.website);
     if (found.email) {
       enriched.email = found.email;

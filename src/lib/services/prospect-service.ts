@@ -222,7 +222,10 @@ export async function importSearchResults(input: {
     });
     if (existing) continue;
 
-    const enriched = await enrichBusiness(biz);
+    const enriched = await enrichBusiness(biz, {
+      skipEmailFinder: true,
+      skipPappers: true,
+    });
 
     const prospect = await prisma.prospect.create({
       data: {
@@ -251,8 +254,12 @@ export async function importSearchResults(input: {
       },
     });
     created.push(prospect);
-    await sleep(300);
+    await sleep(150);
   }
+
+  console.log(
+    `Import campagne ${input.campaignId}: ${created.length} prospect(s) créé(s)`
+  );
 
   return created;
 }

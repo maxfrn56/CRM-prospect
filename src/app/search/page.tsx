@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import { PageHeader, Card, Button } from "@/components/ui";
 import { Loader2 } from "lucide-react";
 
+async function parseApiResponse(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    if (text.toLowerCase().includes("upstream")) {
+      throw new Error(
+        "Le serveur a expiré (timeout). Réessayez avec 1 page, ou attendez le redéploiement."
+      );
+    }
+    throw new Error(text.slice(0, 200) || "Réponse serveur invalide");
+  }
+}
+
 export default function SearchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -13,7 +27,7 @@ export default function SearchPage() {
     name: "",
     sector: "",
     city: "",
-    maxPages: 3,
+    maxPages: 2,
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -27,10 +41,13 @@ export default function SearchPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      const data = await parseApiResponse(res);
+      if (!res.ok) throw new Error(String(data.error ?? "Erreur"));
 
-      router.push(`/prospects?campaign=${data.campaign.id}`);
+      const campaign = data.campaign as { id: string };
+      router.push(
+        `/prospects?campaign=${campaign.id}&importing=1`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -71,7 +88,7 @@ export default function SearchPage() {
             />
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
-                Pages à importer (20 résultats/page)
+                Pages à importer (~20 résultats/page)
               </label>
               <select
                 value={form.maxPages}
@@ -80,7 +97,7 @@ export default function SearchPage() {
                 }
                 className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
               >
-                {[1, 2, 3, 5, 10].map((n) => (
+                {[1, 2, 3, 5].map((n) => (
                   <option key={n} value={n}>
                     {n} page{n > 1 ? "s" : ""} (~{n * 20} entreprises)
                   </option>
@@ -98,7 +115,7 @@ export default function SearchPage() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Import en cours…
+                  Lancement…
                 </>
               ) : (
                 "Lancer la recherche"
@@ -107,8 +124,8 @@ export default function SearchPage() {
           </form>
 
           <p className="mt-4 text-xs text-stone-400">
-            Recherche via Google Places API, enrichissement automatique SIRENE
-            (gratuit) et Pappers si clé configurée.
+            L&apos;import se fait en arrière-plan. Les emails sont recherchés
+            lors de l&apos;audit (bouton « Auditer tous »).
           </p>
         </Card>
       </div>

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { importSearchResults } from "@/lib/services/prospect-service";
 import { z } from "zod";
+
+export const maxDuration = 120;
 
 const schema = z.object({
   name: z.string().min(1),
   sector: z.string().min(1),
   city: z.string().min(1),
-  maxPages: z.number().min(1).max(10).optional(),
+  maxPages: z.number().min(1).max(5).optional(),
 });
 
 export async function GET() {
@@ -30,16 +33,24 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const prospects = await importSearchResults({
-      campaignId: campaign.id,
-      sector: body.sector,
-      city: body.city,
-      maxPages: body.maxPages,
+    after(async () => {
+      try {
+        await importSearchResults({
+          campaignId: campaign.id,
+          sector: body.sector,
+          city: body.city,
+          maxPages: body.maxPages,
+        });
+      } catch (err) {
+        console.error(`Import campagne ${campaign.id} échoué:`, err);
+      }
     });
 
     return NextResponse.json({
       campaign,
-      imported: prospects.length,
+      importing: true,
+      message:
+        "Import lancé en arrière-plan. Les prospects apparaîtront dans quelques instants.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erreur inconnue";
