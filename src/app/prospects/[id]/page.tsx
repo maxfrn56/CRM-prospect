@@ -77,6 +77,10 @@ export default function ProspectDetailPage() {
   const [actionLoading, setActionLoading] = useState("");
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmSaved, setCrmSaved] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [emailError, setEmailError] = useState("");
   const [crmForm, setCrmForm] = useState({
     status: "NEW",
     contactChannel: "",
@@ -88,6 +92,8 @@ export default function ProspectDetailPage() {
       .then((r) => r.json())
       .then((data: ProspectDetail) => {
         setProspect(data);
+        setEmailInput(data.email ?? "");
+        setEmailError("");
         setCrmForm({
           status: data.status,
           contactChannel: data.contactChannel ?? "",
@@ -134,6 +140,30 @@ export default function ProspectDetailPage() {
       setTimeout(() => setCrmSaved(false), 2000);
     } finally {
       setCrmSaving(false);
+    }
+  }
+
+  async function saveEmail(e?: React.FormEvent) {
+    e?.preventDefault();
+    setEmailSaving(true);
+    setEmailSaved(false);
+    setEmailError("");
+    try {
+      const res = await fetch(`/api/prospects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailError(data.error ?? "Impossible d'enregistrer l'email");
+        return;
+      }
+      load();
+      setEmailSaved(true);
+      setTimeout(() => setEmailSaved(false), 2000);
+    } finally {
+      setEmailSaving(false);
     }
   }
 
@@ -345,13 +375,6 @@ export default function ProspectDetailPage() {
                   <Phone className="h-3.5 w-3.5" /> {prospect.phone}
                 </li>
               )}
-              {prospect.email ? (
-                <li className="flex items-center gap-2">
-                  <Mail className="h-3.5 w-3.5" /> {prospect.email}
-                </li>
-              ) : (
-                <li className="text-xs text-stone-400">Email non trouvé</li>
-              )}
               {prospect.website && (
                 <li className="flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5" />
@@ -370,6 +393,54 @@ export default function ProspectDetailPage() {
                 </li>
               )}
             </ul>
+
+            <form onSubmit={saveEmail} className="mt-4 border-t border-stone-100 pt-4">
+              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-stone-600">
+                <Mail className="h-3.5 w-3.5" />
+                Email
+                {prospect.enrichmentSource?.includes("email-finder") && (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-normal text-emerald-700">
+                    trouvé sur le site
+                  </span>
+                )}
+                {prospect.enrichmentSource?.includes("manual") && (
+                  <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-normal text-blue-700">
+                    saisi manuellement
+                  </span>
+                )}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    setEmailError("");
+                  }}
+                  placeholder="contact@entreprise.fr"
+                  className="min-w-0 flex-1 rounded-md border border-stone-300 px-2.5 py-1.5 text-sm"
+                />
+                <Button type="submit" size="sm" disabled={emailSaving}>
+                  {emailSaved ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : emailSaving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    "Enregistrer"
+                  )}
+                </Button>
+              </div>
+              {emailError && (
+                <p className="mt-1.5 text-xs text-red-600">{emailError}</p>
+              )}
+              {!prospect.email && (
+                <p className="mt-1.5 text-xs text-stone-500">
+                  Ajoutez un email pour lancer l&apos;envoi et les relances
+                  automatiques.
+                </p>
+              )}
+            </form>
+
             {prospect.contactNotes && (
               <div className="mt-4 border-t border-stone-100 pt-3">
                 <p className="text-xs font-medium uppercase text-stone-500">

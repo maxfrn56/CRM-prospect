@@ -112,11 +112,35 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     CONTACTED_STATUSES.includes(nextStatus) &&
     !CONTACTED_STATUSES.includes(current.status);
 
+  let emailUpdate: string | null | undefined;
+  let enrichmentSourceUpdate: string | undefined;
+
+  if (data.email !== undefined) {
+    const trimmed = data.email?.trim().toLowerCase() || null;
+    if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
+      return NextResponse.json(
+        { error: "Adresse email invalide" },
+        { status: 400 }
+      );
+    }
+    emailUpdate = trimmed;
+    if (trimmed && trimmed !== current.email?.toLowerCase()) {
+      enrichmentSourceUpdate = current.enrichmentSource?.includes("manual")
+        ? current.enrichmentSource
+        : current.enrichmentSource
+          ? `${current.enrichmentSource}+manual`
+          : "manual";
+    }
+  }
+
   const prospect = await prisma.prospect.update({
     where: { id },
     data: {
       ...(data.status !== undefined ? { status: data.status } : {}),
-      ...(data.email !== undefined ? { email: data.email || null } : {}),
+      ...(emailUpdate !== undefined ? { email: emailUpdate } : {}),
+      ...(enrichmentSourceUpdate !== undefined
+        ? { enrichmentSource: enrichmentSourceUpdate }
+        : {}),
       ...(data.contactChannel !== undefined
         ? { contactChannel: data.contactChannel }
         : {}),
