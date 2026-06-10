@@ -12,20 +12,75 @@ function model() {
   return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Erreur Gemini inconnue";
+  }
+}
+
+function parseRetryAfterSeconds(message: string): number | null {
+  const match = message.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
+  return match ? Math.ceil(parseFloat(match[1])) : null;
+}
+
+function formatGeminiError(err: unknown): Error {
+  const raw = extractErrorMessage(err);
+  const isQuota =
+    /429|RESOURCE_EXHAUSTED|quota exceeded|exceeded your current quota/i.test(
+      raw
+    );
+
+  if (isQuota) {
+    const currentModel = model();
+    return new Error(
+      `Quota Gemini gratuit dépassé pour ${currentModel} (environ 20 requêtes/jour). ` +
+        "Attendez la réinitialisation (minuit PT), activez la facturation sur Google AI Studio, " +
+        "ou essayez GEMINI_MODEL=gemini-2.0-flash dans Railway."
+    );
+  }
+
+  return new Error(raw || "Erreur Gemini");
+}
+
 async function generateJson<T>(prompt: string): Promise<T> {
   const ai = getClient();
-  const response = await ai.models.generateContent({
-    model: model(),
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      temperature: 0.5,
-    },
-  });
+  let lastError: unknown;
 
-  const text = response.text;
-  if (!text) throw new Error("Réponse Gemini vide");
-  return parseJsonResponse<T>(text);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model(),
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.5,
+        },
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("Réponse Gemini vide");
+      return parseJsonResponse<T>(text);
+    } catch (err) {
+      lastError = err;
+      const message = extractErrorMessage(err);
+      const retrySec = parseRetryAfterSeconds(message);
+      if (attempt === 0 && retrySec !== null && retrySec <= 90) {
+        await sleep((retrySec + 1) * 1000);
+        continue;
+      }
+      throw formatGeminiError(err);
+    }
+  }
+
+  throw formatGeminiError(lastError);
 }
 
 function parseJsonResponse<T>(text: string): T {
