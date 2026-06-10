@@ -76,10 +76,43 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ email });
       }
       case "send-email": {
+        const prospect = await prisma.prospect.findUnique({ where: { id } });
+        if (!prospect?.email) {
+          return NextResponse.json(
+            {
+              error:
+                "Aucun email enregistré pour ce prospect — saisissez-le dans Coordonnées puis cliquez Enregistrer.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const alreadySent = await prisma.email.findFirst({
+          where: {
+            prospectId: id,
+            type: "INITIAL",
+            status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+          },
+        });
+        if (alreadySent && !body.emailId) {
+          return NextResponse.json(
+            { error: "Un email initial a déjà été envoyé à ce prospect." },
+            { status: 400 }
+          );
+        }
+
         let emailId = body.emailId;
         if (!emailId) {
-          const draft = await generateAndSaveEmail(id, "INITIAL");
-          emailId = draft.id;
+          const existingDraft = await prisma.email.findFirst({
+            where: { prospectId: id, type: "INITIAL", status: "DRAFT" },
+            orderBy: { createdAt: "desc" },
+          });
+          if (existingDraft) {
+            emailId = existingDraft.id;
+          } else {
+            const draft = await generateAndSaveEmail(id, "INITIAL");
+            emailId = draft.id;
+          }
         }
         const result = await sendProspectEmail(emailId);
         return NextResponse.json({ result });
@@ -88,7 +121,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erreur";
+    console.error(`POST /api/prospects/${id} action=${action}:`, err);
+    const message =
+      err instanceof Error ? err.message : "Erreur lors de l'opération";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

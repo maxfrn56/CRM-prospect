@@ -75,6 +75,7 @@ export default function ProspectDetailPage() {
   const [prospect, setProspect] = useState<ProspectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
+  const [actionError, setActionError] = useState("");
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmSaved, setCrmSaved] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -109,12 +110,18 @@ export default function ProspectDetailPage() {
 
   async function runAction(action: string) {
     setActionLoading(action);
+    setActionError("");
     try {
-      await fetch(`/api/prospects/${id}`, {
+      const res = await fetch(`/api/prospects/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError(data.error ?? "L'opération a échoué");
+        return;
+      }
       load();
     } finally {
       setActionLoading("");
@@ -363,6 +370,11 @@ export default function ProspectDetailPage() {
                 </Button>
               )}
             </div>
+            {actionError && (
+              <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {actionError}
+              </p>
+            )}
           </Card>
 
           <Card className="p-5">

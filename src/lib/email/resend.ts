@@ -38,7 +38,13 @@ export async function sendEmail(input: SendEmailInput) {
     headers: input.headers,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const detail =
+      typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+    throw new Error(detail || "Erreur Resend lors de l'envoi");
+  }
   return data;
 }
 

@@ -25,7 +25,21 @@ async function generateJson<T>(prompt: string): Promise<T> {
 
   const text = response.text;
   if (!text) throw new Error("Réponse Gemini vide");
-  return JSON.parse(text) as T;
+  return parseJsonResponse<T>(text);
+}
+
+function parseJsonResponse<T>(text: string): T {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = fenced ? fenced[1].trim() : trimmed;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(
+      "Réponse Gemini illisible — vérifiez GEMINI_API_KEY et GEMINI_MODEL"
+    );
+  }
 }
 
 export interface GeneratedEmail {
