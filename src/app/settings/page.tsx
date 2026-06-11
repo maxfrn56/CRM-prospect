@@ -48,6 +48,7 @@ export default function SettingsPage() {
     from: string;
     replyTo: string;
     webhookConfigured: boolean;
+    webhookUrl: string | null;
     warnings: string[];
   } | null>(null);
 
@@ -254,9 +255,28 @@ export default function SettingsPage() {
                 </p>
                 <p className="mt-1">
                   <span className="font-medium text-stone-700">Webhook :</span>{" "}
-                  {resendHealth.webhookConfigured ? "✓ configuré" : "✗ manquant"}
+                  {resendHealth.webhookConfigured ? "✓ secret configuré" : "✗ secret manquant"}
                 </p>
+                {resendHealth.webhookUrl && (
+                  <p className="mt-2 break-all">
+                    <span className="font-medium text-stone-700">
+                      URL webhook Resend :
+                    </span>
+                    <br />
+                    <code className="text-violet-800">{resendHealth.webhookUrl}</code>
+                  </p>
+                )}
               </div>
+
+              {resendHealth.webhookUrl && (
+                <p className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+                  Dans Resend → Webhooks, l&apos;URL doit être exactement celle
+                  ci-dessus (avec{" "}
+                  <code>/api/webhooks/resend</code>). Si vous mettez seulement
+                  la racine du site (<code>/</code>), vous obtiendrez une erreur
+                  405 Method Not Allowed.
+                </p>
+              )}
 
               {resendHealth.warnings.length > 0 && (
                 <ul className="space-y-2">

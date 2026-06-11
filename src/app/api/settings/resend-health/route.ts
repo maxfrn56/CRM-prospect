@@ -43,11 +43,15 @@ export async function GET() {
     );
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ?? "";
+  const webhookUrl = appUrl ? `${appUrl}/api/webhooks/resend` : null;
+
   return NextResponse.json({
     from,
     replyTo,
     inboundEmail: process.env.RESEND_INBOUND_EMAIL?.trim() ?? null,
     webhookConfigured: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+    webhookUrl,
     warnings,
   });
 }
