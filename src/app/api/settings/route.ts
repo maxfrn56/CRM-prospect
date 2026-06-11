@@ -10,6 +10,10 @@ const ALLOWED_FIELDS = [
   "website",
   "phone",
   "followupEnabled",
+  "mockupAutoEnabled",
+  "mockupRepoUrl",
+  "mockupRepoRef",
+  "mockupAutoCreatePR",
 ] as const;
 
 export async function GET() {

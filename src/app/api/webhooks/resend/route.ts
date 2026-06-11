@@ -7,6 +7,10 @@ import {
 } from "@/lib/email/resend";
 import { classifyReply } from "@/lib/llm/gemini";
 import { mapReplyToStatus } from "@/lib/services/prospect-service";
+import {
+  launchMockupForProspect,
+  shouldAutoLaunchMockup,
+} from "@/lib/mockup/mockup-service";
 
 export async function GET() {
   return NextResponse.json({
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest) {
         classification: classification.classification,
         aiSummary: classification.summary,
         aiConfidence: classification.confidence,
+        wantsMockup: classification.wantsMockup,
       },
     });
 
@@ -95,11 +100,37 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    let mockupJob = null;
+    const settings = await prisma.appSettings.findUnique({
+      where: { id: "default" },
+    });
+
+    if (
+      settings &&
+      shouldAutoLaunchMockup({
+        classification: classification.classification,
+        mockupAutoEnabled: settings.mockupAutoEnabled,
+        mockupRepoUrl: settings.mockupRepoUrl,
+      })
+    ) {
+      try {
+        mockupJob = await launchMockupForProspect(
+          prospect.id,
+          "AUTO",
+          classification.summary
+        );
+      } catch (err) {
+        console.error("Auto mockup launch failed:", err);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       matched: true,
       prospectId: prospect.id,
       classification: classification.classification,
+      wantsMockup: classification.wantsMockup,
+      mockupLaunched: mockupJob?.status === "RUNNING",
     });
   } catch (err) {
     console.error("Webhook Resend:", err);

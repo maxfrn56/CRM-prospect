@@ -4,6 +4,8 @@ import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemi
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
+import { loadCnbAnnuaire } from "@/lib/enrichment/cnb-annuaire";
+import { isLawyerSector } from "@/lib/enrichment/barreau-email-finder";
 import type { EmailType, ProspectStatus } from "@prisma/client";
 
 const FOLLOWUP_DAYS = [4, 7, 12] as const;
@@ -11,18 +13,29 @@ const FOLLOWUP_DAYS = [4, 7, 12] as const;
 export async function auditProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUniqueOrThrow({
     where: { id: prospectId },
+    include: { campaign: true },
   });
 
   let email = prospect.email;
   let enrichmentSource = prospect.enrichmentSource;
 
-  if (!email && prospect.website) {
-    const found = await findEmailForProspect(prospect.website);
+  if (!email) {
+    const found = await findEmailForProspect(prospect.website, {
+      name: prospect.name,
+      city: prospect.city ?? prospect.campaign?.city,
+      postalCode: prospect.postalCode,
+      sector: prospect.campaign?.sector,
+    });
     if (found.email) {
       email = found.email;
+      const source =
+        found.foundOn?.includes("barreau") ||
+        found.foundOn?.includes("annuaire-barreau")
+          ? "barreau"
+          : "email-finder";
       enrichmentSource = enrichmentSource
-        ? `${enrichmentSource}+email-finder`
-        : "email-finder";
+        ? `${enrichmentSource}+${source}`
+        : source;
     }
   }
 
@@ -44,8 +57,24 @@ export async function auditProspect(prospectId: string) {
 }
 
 export async function auditAllInCampaign(campaignId: string) {
+  const campaign = await prisma.searchCampaign.findUnique({
+    where: { id: campaignId },
+  });
+
+  if (isLawyerSector(campaign?.sector)) {
+    try {
+      await loadCnbAnnuaire();
+    } catch (err) {
+      console.warn("Annuaire CNB non chargé:", err);
+    }
+  }
+
   const prospects = await prisma.prospect.findMany({
-    where: { campaignId, status: "NEW" },
+    where: {
+      campaignId,
+      email: null,
+      status: { in: ["NEW", "AUDITED"] },
+    },
   });
 
   const results: { id: string; score: number; emailFound?: boolean }[] = [];

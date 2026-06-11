@@ -113,6 +113,7 @@ model Prospect {
 
   emails          Email[]
   replies         EmailReply[]
+  mockupJobs      MockupJob[]
 
   @@index([auditScore])
   @@index([status])
@@ -162,6 +163,7 @@ model EmailReply {
   classification  ReplyClassification @default(UNKNOWN)
   aiSummary       String?
   aiConfidence    Float?
+  wantsMockup     Boolean             @default(false)
 
   receivedAt      DateTime            @default(now())
 
@@ -178,5 +180,44 @@ model AppSettings {
   website         String   @default("")
   phone           String   @default("")
   followupEnabled Boolean  @default(true)
+
+  // Maquettes Cursor (agent cloud)
+  mockupAutoEnabled   Boolean @default(false)
+  mockupRepoUrl       String  @default("")
+  mockupRepoRef       String  @default("main")
+  mockupAutoCreatePR  Boolean @default(true)
+
   updatedAt       DateTime @updatedAt
+}
+
+enum MockupJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model MockupJob {
+  id             String          @id @default(cuid())
+  prospectId     String
+  prospect       Prospect        @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  status         MockupJobStatus @default(PENDING)
+  triggeredBy    String          @default("MANUAL") // AUTO | MANUAL
+
+  cursorAgentId  String?
+  cursorRunId    String?
+  cursorAgentUrl String?
+  prUrl          String?
+  branchName     String?
+
+  prompt         String
+  replySummary   String?
+  error          String?
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([prospectId])
+  @@index([status])
 }

@@ -1,6 +1,7 @@
 import { enrichFromSirene } from "./sirene";
 import { enrichFromPappers } from "./pappers";
 import { findEmailOnWebsite } from "@/lib/email-finder/website-email-finder";
+import { findEmailViaBarreau, isLawyerSector } from "./barreau-email-finder";
 import type { BusinessResult } from "@/lib/google-places/client";
 
 export interface EnrichedBusiness extends BusinessResult {
@@ -83,6 +84,39 @@ export async function enrichBusiness(
   return enriched;
 }
 
-export async function findEmailForProspect(website: string | null | undefined) {
-  return findEmailOnWebsite(website);
+export async function findEmailForProspect(
+  website: string | null | undefined,
+  options?: {
+    name?: string;
+    city?: string | null;
+    postalCode?: string | null;
+    sector?: string | null;
+  }
+) {
+  const onWebsite = await findEmailOnWebsite(website);
+  if (onWebsite.email) return onWebsite;
+
+  if (options?.name && isLawyerSector(options.sector)) {
+    const barreau = await findEmailViaBarreau({
+      name: options.name,
+      city: options.city,
+      postalCode: options.postalCode,
+      website,
+      sector: options.sector,
+    });
+    if (barreau.email) {
+      return {
+        email: barreau.email,
+        candidates: [barreau.email],
+        foundOn:
+          barreau.profileUrl ??
+          `annuaire-barreau:${barreau.matchedLawyer?.barreau ?? "cnb"}`,
+        confidence: Math.min(1, barreau.matchScore / 100),
+      };
+    }
+  }
+
+  return onWebsite;
 }
+
+export { isLawyerSector, findEmailViaBarreau };

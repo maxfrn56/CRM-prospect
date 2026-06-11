@@ -7,6 +7,11 @@ import {
 import { findEmailForProspect } from "@/lib/enrichment";
 import { prisma } from "@/lib/db";
 import type { ContactChannel, ProspectStatus } from "@prisma/client";
+import {
+  getLatestMockupJob,
+  launchMockupForProspect,
+  syncMockupJob,
+} from "@/lib/mockup/mockup-service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -33,7 +38,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Prospect introuvable" }, { status: 404 });
   }
 
-  return NextResponse.json(prospect);
+  const latestMockupJob = await getLatestMockupJob(id);
+
+  return NextResponse.json({ ...prospect, latestMockupJob });
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -50,22 +57,25 @@ export async function POST(req: NextRequest, { params }: Params) {
       case "find-email": {
         const prospect = await prisma.prospect.findUniqueOrThrow({
           where: { id },
+          include: { campaign: true },
         });
-        if (!prospect.website) {
-          return NextResponse.json(
-            { error: "Aucun site web pour ce prospect" },
-            { status: 400 }
-          );
-        }
-        const found = await findEmailForProspect(prospect.website);
+        const found = await findEmailForProspect(prospect.website, {
+          name: prospect.name,
+          city: prospect.city ?? prospect.campaign?.city,
+          postalCode: prospect.postalCode,
+          sector: prospect.campaign?.sector,
+        });
         if (found.email) {
+          const source = found.foundOn?.includes("barreau")
+            ? "barreau"
+            : "email-finder";
           await prisma.prospect.update({
             where: { id },
             data: {
               email: found.email,
               enrichmentSource: prospect.enrichmentSource
-                ? `${prospect.enrichmentSource}+email-finder`
-                : "email-finder",
+                ? `${prospect.enrichmentSource}+${source}`
+                : source,
             },
           });
         }
@@ -116,6 +126,30 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
         const result = await sendProspectEmail(emailId);
         return NextResponse.json({ result });
+      }
+      case "launch-mockup": {
+        const job = await launchMockupForProspect(id, "MANUAL");
+        if (job.status === "FAILED") {
+          return NextResponse.json(
+            { error: job.error ?? "Échec du lancement Cursor" },
+            { status: 400 }
+          );
+        }
+        return NextResponse.json({ job });
+      }
+      case "sync-mockup": {
+        const latest = await prisma.mockupJob.findFirst({
+          where: { prospectId: id },
+          orderBy: { createdAt: "desc" },
+        });
+        if (!latest) {
+          return NextResponse.json(
+            { error: "Aucune maquette pour ce prospect" },
+            { status: 404 }
+          );
+        }
+        const job = await syncMockupJob(latest.id);
+        return NextResponse.json({ job });
       }
       default:
         return NextResponse.json({ error: "Action inconnue" }, { status: 400 });

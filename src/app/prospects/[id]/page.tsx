@@ -15,6 +15,10 @@ import {
   statusBadgeClass,
 } from "@/lib/utils";
 import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2, Instagram } from "lucide-react";
+import {
+  MockupSection,
+  type MockupJobSummary,
+} from "@/components/prospects/mockup-section";
 
 interface AuditDetails {
   score: number;
@@ -53,6 +57,7 @@ interface ProspectDetail {
   legalName: string | null;
   enrichmentSource: string | null;
   googleMapsUrl: string | null;
+  campaign: { sector: string; city: string; name: string } | null;
   emails: {
     id: string;
     type: string;
@@ -65,9 +70,11 @@ interface ProspectDetail {
     id: string;
     classification: string;
     aiSummary: string | null;
+    wantsMockup?: boolean;
     bodyText: string;
     receivedAt: string;
   }[];
+  latestMockupJob?: MockupJobSummary | null;
 }
 
 export default function ProspectDetailPage() {
@@ -203,6 +210,10 @@ export default function ProspectDetailPage() {
   const audit: AuditDetails | null = prospect.auditDetails
     ? JSON.parse(prospect.auditDetails)
     : null;
+
+  const isLawyerCampaign = /avocat|barreau/i.test(
+    prospect.campaign?.sector ?? prospect.activity ?? ""
+  );
 
   return (
     <>
@@ -369,12 +380,40 @@ export default function ProspectDetailPage() {
                   )}
                 </Button>
               )}
+              {!prospect.email && isLawyerCampaign && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => runAction("find-email")}
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "find-email" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    "Chercher via barreau"
+                  )}
+                </Button>
+              )}
             </div>
+            {isLawyerCampaign && !prospect.email && (
+              <p className="mt-2 text-xs text-stone-500">
+                Campagne avocats : recherche dans l&apos;annuaire CNB puis sur
+                le site du barreau local.
+              </p>
+            )}
             {actionError && (
               <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {actionError}
               </p>
             )}
+
+            <MockupSection
+              job={prospect.latestMockupJob}
+              prospectStatus={prospect.status}
+              loading={actionLoading}
+              onLaunch={() => runAction("launch-mockup")}
+              onSync={() => runAction("sync-mockup")}
+            />
           </Card>
 
           <Card className="p-5">
@@ -413,6 +452,11 @@ export default function ProspectDetailPage() {
                 {prospect.enrichmentSource?.includes("email-finder") && (
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-normal text-emerald-700">
                     trouvé sur le site
+                  </span>
+                )}
+                {prospect.enrichmentSource?.includes("barreau") && (
+                  <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-normal text-violet-700">
+                    trouvé via barreau
                   </span>
                 )}
                 {prospect.enrichmentSource?.includes("manual") && (

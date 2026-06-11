@@ -21,6 +21,10 @@ interface Settings {
   website: string;
   phone: string;
   followupEnabled: boolean;
+  mockupAutoEnabled: boolean;
+  mockupRepoUrl: string;
+  mockupRepoRef: string;
+  mockupAutoCreatePR: boolean;
 }
 
 export default function SettingsPage() {
@@ -33,6 +37,10 @@ export default function SettingsPage() {
     website: "",
     phone: "",
     followupEnabled: true,
+    mockupAutoEnabled: false,
+    mockupRepoUrl: "",
+    mockupRepoRef: "main",
+    mockupAutoCreatePR: true,
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -207,6 +215,74 @@ export default function SettingsPage() {
 
         <Card className="p-6">
           <h2 className="text-sm font-semibold text-stone-900">
+            Maquettes Cursor (agent cloud)
+          </h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Dès qu&apos;un prospect répond avec un intérêt clair (statut HOT),
+            un agent Cursor crée une page HTML dans votre repo GitHub — sans
+            attendre qu&apos;il demande explicitement une maquette.
+          </p>
+          <form onSubmit={handleSave} className="mt-4 space-y-4">
+            <label className="flex items-center gap-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                checked={settings.mockupAutoEnabled}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    mockupAutoEnabled: e.target.checked,
+                  })
+                }
+                className="rounded border-stone-300"
+              />
+              Lancer automatiquement une maquette dès qu&apos;une réponse est
+              classée chaude (HOT)
+            </label>
+            <Field
+              label="Repo GitHub des maquettes"
+              value={settings.mockupRepoUrl}
+              onChange={(v) => setSettings({ ...settings, mockupRepoUrl: v })}
+              placeholder="https://github.com/votre-org/maquettes-prospects"
+            />
+            <Field
+              label="Branche de départ"
+              value={settings.mockupRepoRef}
+              onChange={(v) => setSettings({ ...settings, mockupRepoRef: v })}
+              placeholder="main"
+            />
+            <label className="flex items-center gap-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                checked={settings.mockupAutoCreatePR}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    mockupAutoCreatePR: e.target.checked,
+                  })
+                }
+                className="rounded border-stone-300"
+              />
+              Créer une Pull Request automatiquement
+            </label>
+            <p className="text-xs text-stone-400">
+              Nécessite <code className="text-stone-600">CURSOR_API_KEY</code>{" "}
+              dans Railway et l&apos;accès GitHub du compte Cursor au repo.
+            </p>
+            <Button type="submit">
+              {saved ? (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Enregistré
+                </>
+              ) : (
+                "Enregistrer"
+              )}
+            </Button>
+          </form>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-stone-900">
             Variables d&apos;environnement (.env)
           </h2>
           <ul className="mt-4 space-y-3 text-sm text-stone-600">
@@ -221,6 +297,10 @@ export default function SettingsPage() {
             <EnvItem
               name="RESEND_FROM_EMAIL"
               desc="Adresse d'envoi vérifiée Resend"
+            />
+            <EnvItem
+              name="CURSOR_API_KEY"
+              desc="Clé API Cursor — agents cloud pour les maquettes (cursor.com/settings)"
             />
           </ul>
         </Card>

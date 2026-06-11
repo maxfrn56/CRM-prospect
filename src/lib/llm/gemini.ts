@@ -237,6 +237,7 @@ export async function classifyReply(input: {
   classification: ReplyClassification;
   summary: string;
   confidence: number;
+  wantsMockup: boolean;
 }> {
   const prompt = `Analyse cette réponse email à une prospection commerciale web.
 
@@ -256,19 +257,27 @@ Classifie en une catégorie:
 - BOUNCE: erreur de livraison, adresse invalide
 - UNKNOWN: impossible à déterminer
 
-Réponds en JSON: {"classification":"HOT|WARM|COLD|OUT_OF_OFFICE|BOUNCE|UNKNOWN","summary":"1 phrase","confidence":0.0-1.0}`;
+Indique wantsMockup=true si le prospect demande (explicitement ou implicitement) une maquette, un aperçu visuel, une démo de site, une refonte, ou montre un intérêt concret pour voir à quoi ressemblerait son futur site.
+
+Réponds en JSON: {"classification":"HOT|WARM|COLD|OUT_OF_OFFICE|BOUNCE|UNKNOWN","summary":"1 phrase","confidence":0.0-1.0,"wantsMockup":true|false}`;
 
   try {
-    return await generateJson<{
+    const result = await generateJson<{
       classification: ReplyClassification;
       summary: string;
       confidence: number;
+      wantsMockup?: boolean;
     }>(prompt);
+    return {
+      ...result,
+      wantsMockup: Boolean(result.wantsMockup),
+    };
   } catch {
     return {
       classification: "UNKNOWN",
       summary: "Classification impossible",
       confidence: 0,
+      wantsMockup: false,
     };
   }
 }

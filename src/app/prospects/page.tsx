@@ -2,14 +2,13 @@
 
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { PageHeader, Card, Badge, Button, EmptyState } from "@/components/ui";
+import { PageHeader, Card, Button, EmptyState } from "@/components/ui";
 import {
   CampaignSidebar,
   type Campaign,
 } from "@/components/prospects/campaign-sidebar";
-import { scoreColor, statusLabel, contactChannelLabel } from "@/lib/utils";
-import { ArrowUpDown, ExternalLink, Loader2 } from "lucide-react";
+import { ProspectTableRow } from "@/components/prospects/prospect-table-row";
+import { ArrowUpDown, Loader2 } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -216,6 +215,7 @@ function ProspectsContent() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-stone-200 text-left text-xs text-stone-500">
+                          <th className="w-10 px-3 py-3" />
                           <th className="px-5 py-3 font-medium">Entreprise</th>
                           <th className="px-5 py-3 font-medium">Ville</th>
                           <th className="px-5 py-3 font-medium">
@@ -228,53 +228,14 @@ function ProspectsContent() {
                           <th className="px-5 py-3 font-medium"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-stone-100">
+                      <tbody>
                         {prospects.map((p) => (
-                          <tr key={p.id} className="hover:bg-stone-50">
-                            <td className="px-5 py-3">
-                              <Link
-                                href={`/prospects/${p.id}`}
-                                className="font-medium text-stone-900 hover:underline"
-                              >
-                                {p.name}
-                              </Link>
-                              {p.activity && (
-                                <p className="text-xs text-stone-500">
-                                  {p.activity}
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-5 py-3 text-stone-600">
-                              {p.city ?? "—"}
-                            </td>
-                            <td className="px-5 py-3">
-                              {p.auditScore > 0 ? (
-                                <Badge className={scoreColor(p.auditScore)}>
-                                  {p.auditScore}/100
-                                </Badge>
-                              ) : (
-                                <span className="text-stone-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-3">
-                              <Badge className="border-stone-200 bg-stone-50 text-stone-600">
-                                {statusLabel(p.status)}
-                              </Badge>
-                              {p.contactChannel && (
-                                <span className="ml-1.5 text-[10px] text-blue-600">
-                                  {contactChannelLabel(p.contactChannel)}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-5 py-3 text-xs text-stone-500">
-                              {p.email ?? p.phone ?? "—"}
-                            </td>
-                            <td className="px-5 py-3">
-                              <Link href={`/prospects/${p.id}`}>
-                                <ExternalLink className="h-4 w-4 text-stone-400" />
-                              </Link>
-                            </td>
-                          </tr>
+                          <ProspectTableRow
+                            key={p.id}
+                            prospect={p}
+                            campaignSector={selectedCampaign?.sector}
+                            onRefresh={loadProspects}
+                          />
                         ))}
                       </tbody>
                     </table>
