@@ -7,6 +7,20 @@ function getResend() {
   return new Resend(key);
 }
 
+/** Adresse où les réponses prospect doivent arriver (domaine Resend inbound). */
+export function getResendReplyToEmail(): string {
+  const inbound = process.env.RESEND_INBOUND_EMAIL?.trim();
+  if (inbound) return inbound;
+
+  const replyTo = process.env.RESEND_REPLY_TO?.trim();
+  if (replyTo) return replyTo;
+
+  const from = process.env.RESEND_FROM_EMAIL?.trim();
+  if (from) return from;
+
+  throw new Error("RESEND_FROM_EMAIL manquant");
+}
+
 export interface SendEmailInput {
   to: string;
   subject: string;
@@ -21,10 +35,7 @@ export async function sendEmail(input: SendEmailInput) {
   const from = process.env.RESEND_FROM_EMAIL;
   if (!from) throw new Error("RESEND_FROM_EMAIL manquant");
 
-  const replyTo =
-    input.replyTo ??
-    process.env.RESEND_REPLY_TO ??
-    process.env.RESEND_FROM_EMAIL;
+  const replyTo = input.replyTo ?? getResendReplyToEmail();
 
   const resend = getResend();
   const { data, error } = await resend.emails.send({

@@ -44,12 +44,23 @@ export default function SettingsPage() {
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [resendHealth, setResendHealth] = useState<{
+    from: string;
+    replyTo: string;
+    webhookConfigured: boolean;
+    warnings: string[];
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => setSettings((prev) => ({ ...prev, ...data })))
       .finally(() => setLoading(false));
+
+    fetch("/api/settings/resend-health")
+      .then((r) => r.json())
+      .then(setResendHealth)
+      .catch(() => null);
   }, []);
 
   async function handleSave(e: React.FormEvent) {
@@ -90,7 +101,7 @@ export default function SettingsPage() {
               placeholder="Maxime Farineau"
             />
             <Field
-              label="Email de réponse"
+              label="Email de réponse (affichage — vos réponses arrivent via Resend)"
               value={settings.senderEmail}
               onChange={(v) => setSettings({ ...settings, senderEmail: v })}
               placeholder="contact@votredomaine.fr"
@@ -179,8 +190,15 @@ export default function SettingsPage() {
                   {settings.website && (
                     <p className="text-stone-600">{settings.website}</p>
                   )}
-                  {settings.senderEmail && (
-                    <p className="text-stone-600">{settings.senderEmail}</p>
+                  {(resendHealth?.replyTo || settings.senderEmail) && (
+                    <p className="text-stone-600">
+                      {resendHealth?.replyTo || settings.senderEmail}
+                      {resendHealth?.replyTo && (
+                        <span className="ml-1 text-[10px] text-stone-400">
+                          (Reply-To Resend)
+                        </span>
+                      )}
+                    </p>
                   )}
                 </div>
               </div>
@@ -211,6 +229,69 @@ export default function SettingsPage() {
               )}
             </Button>
           </form>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-stone-900">
+            Réception des réponses email
+          </h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Les réponses prospects doivent transiter par Resend pour que le CRM
+            les classifie automatiquement. Si elles arrivent directement dans
+            Zimbra, Resend et le CRM ne les voient pas.
+          </p>
+
+          {resendHealth && (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs">
+                <p>
+                  <span className="font-medium text-stone-700">Envoi (From) :</span>{" "}
+                  {resendHealth.from || "—"}
+                </p>
+                <p className="mt-1">
+                  <span className="font-medium text-stone-700">Réponses (Reply-To) :</span>{" "}
+                  {resendHealth.replyTo || "—"}
+                </p>
+                <p className="mt-1">
+                  <span className="font-medium text-stone-700">Webhook :</span>{" "}
+                  {resendHealth.webhookConfigured ? "✓ configuré" : "✗ manquant"}
+                </p>
+              </div>
+
+              {resendHealth.warnings.length > 0 && (
+                <ul className="space-y-2">
+                  {resendHealth.warnings.map((w) => (
+                    <li
+                      key={w}
+                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                    >
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="text-xs text-stone-500">
+                <p className="font-medium text-stone-700">Si vous utilisez Zimbra :</p>
+                <ol className="mt-1 list-inside list-decimal space-y-1">
+                  <li>
+                    Resend → Receiving → récupérez une adresse{" "}
+                    <code>@xxx.resend.app</code> ou créez un sous-domaine (ex.{" "}
+                    <code>replies.votredomaine.fr</code>) avec l&apos;enregistrement MX Resend
+                  </li>
+                  <li>
+                    Railway :{" "}
+                    <code>RESEND_INBOUND_EMAIL=cette-adresse-resend</code>
+                  </li>
+                  <li>
+                    Resend → Webhooks : événement{" "}
+                    <code>email.received</code> →{" "}
+                    <code>/api/webhooks/resend</code>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card className="p-6">

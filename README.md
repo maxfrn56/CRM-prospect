@@ -52,10 +52,15 @@ Le build exécute `next build`. Le schéma Prisma est appliqué au **démarrage*
 
 ### Webhook Resend (réponses automatiques)
 
+> **Zimbra / Gmail / Outlook perso :** si les réponses arrivent dans votre boîte habituelle
+> mais pas dans Resend, c'est normal — elles contournent Resend. Voir la section
+> « Réception des réponses email » dans Paramètres du CRM.
+
 #### 1. Activer la réception sur ton domaine
-1. [Resend → Domains](https://resend.com/domains) → ton domaine vérifié
-2. Active **Inbound** (Receiving)
-3. `RESEND_FROM_EMAIL` doit être une adresse de **ce domaine** (ex. `prospection@tondomaine.fr`)
+1. [Resend → Receiving](https://resend.com/emails/receiving) → récupère une adresse `@xxx.resend.app`
+   **ou** ajoute un **sous-domaine** (ex. `replies.tondomaine.fr`) avec l'enregistrement MX Resend
+2. **Ne pas** mettre ton email Zimbra dans `RESEND_REPLY_TO` — Resend ne le verra jamais
+3. `RESEND_FROM_EMAIL` = adresse d'envoi vérifiée sur Resend (ex. `prospection@tondomaine.fr`)
 
 #### 2. Créer le webhook
 1. [Resend → Webhooks](https://resend.com/webhooks) → **Add webhook**
@@ -70,9 +75,13 @@ Le build exécute `next build`. Le schéma Prisma est appliqué au **démarrage*
 ```
 RESEND_WEBHOOK_SECRET=whsec_...
 RESEND_FROM_EMAIL=prospection@tondomaine.fr
-RESEND_REPLY_TO=prospection@tondomaine.fr
+RESEND_INBOUND_EMAIL=xxxxx@inbound.resend.app
+RESEND_REPLY_TO=xxxxx@inbound.resend.app
 NEXT_PUBLIC_APP_URL=https://ton-url.railway.app
 ```
+
+> `RESEND_INBOUND_EMAIL` = adresse gérée par Resend (Receiving). Les emails envoyés
+> utilisent cette adresse en Reply-To et en signature — pas votre boîte Zimbra.
 
 #### 4. Vérifier que l'endpoint répond
 Ouvre dans le navigateur :
