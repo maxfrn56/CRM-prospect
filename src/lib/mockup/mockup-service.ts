@@ -4,6 +4,7 @@ import {
   createCursorAgent,
   getCursorAgent,
   getCursorRun,
+  normalizeGithubRepoUrl,
 } from "./cursor-client";
 
 type ProspectWithCampaign = Prospect & {
@@ -124,6 +125,8 @@ export async function launchMockupForProspect(
     null;
 
   const prompt = buildMockupPrompt(prospect, settings, summary);
+  const repoUrl = normalizeGithubRepoUrl(settings.mockupRepoUrl.trim());
+  const repoRef = settings.mockupRepoRef?.trim() || "main";
 
   const job = await prisma.mockupJob.create({
     data: {
@@ -138,9 +141,9 @@ export async function launchMockupForProspect(
   try {
     const result = await createCursorAgent({
       prompt,
-      name: `Maquette — ${prospect.name}`.slice(0, 100),
-      repoUrl: settings.mockupRepoUrl.trim(),
-      repoRef: settings.mockupRepoRef || "main",
+      name: `Maquette - ${prospect.name}`.slice(0, 100),
+      repoUrl,
+      repoRef,
       autoCreatePR: settings.mockupAutoCreatePR,
     });
 

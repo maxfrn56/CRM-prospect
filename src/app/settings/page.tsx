@@ -27,6 +27,16 @@ interface Settings {
   mockupAutoCreatePR: boolean;
 }
 
+interface CursorHealth {
+  hasApiKey: boolean;
+  repoUrl: string;
+  repoRef: string;
+  repoAccessible: boolean | null;
+  accessibleReposSample: string[];
+  lastError: string | null;
+  warnings: string[];
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     senderName: "",
@@ -51,6 +61,8 @@ export default function SettingsPage() {
     webhookUrl: string | null;
     warnings: string[];
   } | null>(null);
+  const [cursorHealth, setCursorHealth] = useState<CursorHealth | null>(null);
+  const [cursorHealthLoading, setCursorHealthLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -62,6 +74,13 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then(setResendHealth)
       .catch(() => null);
+
+    setCursorHealthLoading(true);
+    fetch("/api/settings/cursor-health")
+      .then((r) => r.json())
+      .then(setCursorHealth)
+      .catch(() => null)
+      .finally(() => setCursorHealthLoading(false));
   }, []);
 
   async function handleSave(e: React.FormEvent) {
@@ -369,6 +388,63 @@ export default function SettingsPage() {
               Nécessite <code className="text-stone-600">CURSOR_API_KEY</code>{" "}
               dans Railway et l&apos;accès GitHub du compte Cursor au repo.
             </p>
+
+            {cursorHealthLoading ? (
+              <p className="text-xs text-stone-500">Vérification Cursor…</p>
+            ) : cursorHealth ? (
+              <div className="space-y-2 rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs">
+                <p>
+                  <span className="font-medium text-stone-700">Clé API :</span>{" "}
+                  {cursorHealth.hasApiKey ? "✓ configurée" : "✗ manquante"}
+                </p>
+                {cursorHealth.repoUrl && (
+                  <p className="break-all">
+                    <span className="font-medium text-stone-700">Repo :</span>{" "}
+                    {cursorHealth.repoUrl}
+                  </p>
+                )}
+                <p>
+                  <span className="font-medium text-stone-700">Branche :</span>{" "}
+                  {cursorHealth.repoRef}
+                </p>
+                {cursorHealth.repoAccessible !== null && (
+                  <p>
+                    <span className="font-medium text-stone-700">
+                      Accès GitHub Cursor :
+                    </span>{" "}
+                    {cursorHealth.repoAccessible ? "✓ OK" : "✗ non autorisé"}
+                  </p>
+                )}
+                {cursorHealth.lastError && (
+                  <p className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-red-800">
+                    Dernière erreur : {cursorHealth.lastError}
+                  </p>
+                )}
+                {cursorHealth.warnings.map((w) => (
+                  <p
+                    key={w}
+                    className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-900"
+                  >
+                    {w}
+                  </p>
+                ))}
+                {cursorHealth.accessibleReposSample.length > 0 && (
+                  <div className="text-stone-600">
+                    <p className="font-medium text-stone-700">
+                      Repos accessibles (extrait) :
+                    </p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {cursorHealth.accessibleReposSample.map((repo) => (
+                        <li key={repo} className="break-all">
+                          {repo}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <Button type="submit">
               {saved ? (
                 <>
