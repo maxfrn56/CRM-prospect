@@ -52,6 +52,14 @@ function parseCursorError(data: unknown, status: number): string {
 
   const obj = data as Record<string, unknown>;
 
+  const nested = obj.error;
+  if (typeof nested === "object" && nested !== null && "message" in nested) {
+    const nestedMessage = (nested as { message?: unknown }).message;
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage;
+    }
+  }
+
   if (typeof obj.message === "string" && obj.message.trim()) {
     return obj.message;
   }

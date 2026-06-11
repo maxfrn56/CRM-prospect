@@ -31,6 +31,9 @@ interface CursorHealth {
   hasApiKey: boolean;
   repoUrl: string;
   repoRef: string;
+  resolvedRepoRef: string | null;
+  githubDefaultBranch: string | null;
+  githubBranches: string[];
   repoAccessible: boolean | null;
   accessibleReposSample: string[];
   lastError: string | null;
@@ -368,7 +371,7 @@ export default function SettingsPage() {
               label="Branche de départ"
               value={settings.mockupRepoRef}
               onChange={(v) => setSettings({ ...settings, mockupRepoRef: v })}
-              placeholder="main"
+              placeholder="main (auto-détectée si absente)"
             />
             <label className="flex items-center gap-2 text-sm text-stone-700">
               <input
@@ -406,7 +409,21 @@ export default function SettingsPage() {
                 <p>
                   <span className="font-medium text-stone-700">Branche :</span>{" "}
                   {cursorHealth.repoRef}
+                  {cursorHealth.resolvedRepoRef &&
+                    cursorHealth.resolvedRepoRef !== cursorHealth.repoRef && (
+                      <span className="ml-1 text-violet-700">
+                        → utilisera « {cursorHealth.resolvedRepoRef} »
+                      </span>
+                    )}
                 </p>
+                {cursorHealth.githubBranches.length > 0 && (
+                  <p>
+                    <span className="font-medium text-stone-700">
+                      Branches GitHub :
+                    </span>{" "}
+                    {cursorHealth.githubBranches.join(", ")}
+                  </p>
+                )}
                 {cursorHealth.repoAccessible !== null && (
                   <p>
                     <span className="font-medium text-stone-700">

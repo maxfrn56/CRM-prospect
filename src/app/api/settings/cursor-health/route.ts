@@ -5,6 +5,11 @@ import {
   normalizeGithubRepoUrl,
   verifyRepoAccessible,
 } from "@/lib/mockup/cursor-client";
+import {
+  getGithubDefaultBranch,
+  listGithubBranches,
+  resolveGithubRepoRef,
+} from "@/lib/mockup/github-repo";
 
 export async function GET() {
   const hasApiKey = Boolean(process.env.CURSOR_API_KEY?.trim());
@@ -19,6 +24,9 @@ export async function GET() {
   let normalizedRepoUrl: string | null = null;
   let repoAccessible: boolean | null = null;
   let accessibleRepos: string[] = [];
+  let resolvedRepoRef: string | null = null;
+  let githubDefaultBranch: string | null = null;
+  let githubBranches: string[] = [];
 
   if (!hasApiKey) {
     warnings.push("CURSOR_API_KEY manquant dans Railway.");
@@ -39,6 +47,34 @@ export async function GET() {
     } catch (err) {
       warnings.push(
         err instanceof Error ? err.message : "URL du repo GitHub invalide."
+      );
+    }
+  }
+
+  if (normalizedRepoUrl) {
+    githubDefaultBranch = await getGithubDefaultBranch(normalizedRepoUrl);
+    githubBranches = await listGithubBranches(normalizedRepoUrl);
+
+    try {
+      const resolved = await resolveGithubRepoRef(
+        normalizedRepoUrl,
+        settings?.mockupRepoRef
+      );
+      resolvedRepoRef = resolved.ref;
+      if (resolved.autoDetected && repoRef !== resolved.ref) {
+        warnings.push(
+          `La branche « ${repoRef} » n'existe pas — le CRM utilisera « ${resolved.ref} » automatiquement.`
+        );
+      }
+    } catch (err) {
+      warnings.push(
+        err instanceof Error ? err.message : "Impossible de résoudre la branche GitHub."
+      );
+    }
+
+    if (githubBranches.length === 0) {
+      warnings.push(
+        "Repo GitHub vide : créez un README sur github.com pour initialiser une branche."
       );
     }
   }
@@ -69,6 +105,9 @@ export async function GET() {
     hasApiKey,
     repoUrl: normalizedRepoUrl ?? repoUrl,
     repoRef,
+    resolvedRepoRef,
+    githubDefaultBranch,
+    githubBranches,
     mockupAutoEnabled: settings?.mockupAutoEnabled ?? false,
     repoAccessible,
     accessibleReposSample: accessibleRepos,

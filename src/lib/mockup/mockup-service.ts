@@ -6,6 +6,7 @@ import {
   getCursorRun,
   normalizeGithubRepoUrl,
 } from "./cursor-client";
+import { resolveGithubRepoRef } from "./github-repo";
 
 type ProspectWithCampaign = Prospect & {
   campaign?: { sector: string; city: string; name: string } | null;
@@ -126,7 +127,10 @@ export async function launchMockupForProspect(
 
   const prompt = buildMockupPrompt(prospect, settings, summary);
   const repoUrl = normalizeGithubRepoUrl(settings.mockupRepoUrl.trim());
-  const repoRef = settings.mockupRepoRef?.trim() || "main";
+  const { ref: repoRef } = await resolveGithubRepoRef(
+    repoUrl,
+    settings.mockupRepoRef
+  );
 
   const job = await prisma.mockupJob.create({
     data: {
