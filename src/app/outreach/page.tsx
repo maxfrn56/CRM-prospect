@@ -12,7 +12,8 @@ import {
   statusBadgeClass,
   statusLabel,
 } from "@/lib/utils";
-import { Check, Circle, MessageSquare, ExternalLink } from "lucide-react";
+import { Check, Circle, MessageSquare, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui";
 
 interface OutreachEmail {
   id: string;
@@ -58,7 +59,13 @@ interface OutreachData {
 function EmailTimeline({ emails }: { emails: OutreachEmail[] }) {
   const sentByType = new Map(
     emails
-      .filter((e) => e.status === "SENT" || e.status === "REPLIED")
+      .filter(
+        (e) =>
+          e.status === "SENT" ||
+          e.status === "DELIVERED" ||
+          e.status === "OPENED" ||
+          e.status === "REPLIED"
+      )
       .map((e) => [e.type, e])
   );
 
@@ -101,6 +108,28 @@ export default function OutreachPage() {
   const [data, setData] = useState<OutreachData | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [followupInfo, setFollowupInfo] = useState<{
+    enabled: boolean;
+    due: number;
+    hint: string;
+    cronUrl: string | null;
+    items: {
+      prospectName: string;
+      daysSince: number;
+      nextFollowup: string | null;
+      action: string;
+      reason?: string;
+    }[];
+  } | null>(null);
+  const [followupRunning, setFollowupRunning] = useState(false);
+  const [followupMessage, setFollowupMessage] = useState("");
+
+  function loadFollowups() {
+    fetch("/api/followups")
+      .then((r) => r.json())
+      .then(setFollowupInfo)
+      .catch(() => null);
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -108,7 +137,32 @@ export default function OutreachPage() {
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
+    loadFollowups();
   }, [filter]);
+
+  async function runFollowups() {
+    setFollowupRunning(true);
+    setFollowupMessage("");
+    try {
+      const res = await fetch("/api/followups", { method: "POST" });
+      const result = await res.json();
+      if (!res.ok) {
+        setFollowupMessage(result.error ?? "Erreur");
+        return;
+      }
+      setFollowupMessage(
+        result.processed > 0
+          ? `${result.processed} relance(s) envoyée(s).`
+          : "Aucune relance à envoyer pour le moment."
+      );
+      loadFollowups();
+      fetch(`/api/outreach?filter=${filter}`)
+        .then((r) => r.json())
+        .then(setData);
+    } finally {
+      setFollowupRunning(false);
+    }
+  }
 
   return (
     <>
@@ -126,6 +180,75 @@ export default function OutreachPage() {
             <StatCard label="Chauds" value={data.stats.hot} />
             <StatCard label="Froids" value={data.stats.cold} />
           </div>
+        )}
+
+        {followupInfo && (
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-stone-900">
+                  Relances automatiques (J+4, J+7, J+12)
+                </h2>
+                <p className="mt-1 text-xs text-stone-500">
+                  {followupInfo.enabled
+                    ? followupInfo.hint
+                    : "Relances désactivées — activez-les dans Paramètres."}
+                </p>
+                {followupInfo.due > 0 && (
+                  <p className="mt-2 text-sm font-medium text-amber-800">
+                    {followupInfo.due} relance(s) en attente
+                  </p>
+                )}
+                {followupInfo.cronUrl && (
+                  <p className="mt-2 break-all text-[11px] text-stone-400">
+                    Cron Railway : POST {followupInfo.cronUrl} (Bearer CRON_SECRET)
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={loadFollowups}
+                  disabled={followupRunning}
+                >
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Actualiser
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={runFollowups}
+                  disabled={followupRunning || !followupInfo.enabled}
+                >
+                  {followupRunning ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    "Lancer les relances"
+                  )}
+                </Button>
+              </div>
+            </div>
+            {followupMessage && (
+              <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-700">
+                {followupMessage}
+              </p>
+            )}
+            {followupInfo.items.filter((i) => i.action === "due").length > 0 && (
+              <ul className="mt-3 space-y-1 text-xs text-stone-600">
+                {followupInfo.items
+                  .filter((i) => i.action === "due")
+                  .slice(0, 8)
+                  .map((item) => (
+                    <li key={`${item.prospectName}-${item.nextFollowup}`}>
+                      {item.prospectName} — J+{item.daysSince} →{" "}
+                      {item.nextFollowup
+                        ? emailTypeLabel(item.nextFollowup)
+                        : "—"}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </Card>
         )}
 
         <div className="flex flex-wrap gap-2">

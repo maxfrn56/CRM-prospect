@@ -119,11 +119,34 @@ Tu dois voir : `{"ok":true,"service":"resend-webhook",...}`
 
 ## Relances
 
+Les relances **ne partent pas toutes seules** : un cron doit appeler l'endpoint chaque jour.
+
+### Manuel (immédiat)
+
+Dans l'app : **Suivi des envois** → bouton **Lancer les relances**
+
+Ou en local :
 ```bash
 npm run cron:followups
 ```
 
-En production sur Railway, planifier un cron HTTP vers `/api/cron/followups`.
+### Automatique sur Railway
+
+1. Créez un service **Cron** dans votre projet Railway (ou utilisez [cron-job.org](https://cron-job.org))
+2. Planification : **tous les jours à 9h** (`0 9 * * *`)
+3. Requête :
+   ```
+   POST https://VOTRE-URL-RAILWAY/api/cron/followups
+   Header: Authorization: Bearer VOTRE_CRON_SECRET
+   ```
+4. Vérifiez que `CRON_SECRET` est défini dans les variables Railway du service Next.js
+5. Vérifiez que **Relances automatiques** est coché dans Paramètres
+
+### Conditions pour qu'une relance parte
+
+- Prospect en statut **Contacté** (pas de réponse reçue)
+- Email initial envoyé il y a ≥ 4 jours (puis 7, puis 12)
+- Relances activées dans Paramètres
 
 ## Note sur les emails prospects
 

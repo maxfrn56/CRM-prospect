@@ -6,9 +6,27 @@ import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
 import { loadCnbAnnuaire } from "@/lib/enrichment/cnb-annuaire";
 import { isLawyerSector } from "@/lib/enrichment/barreau-email-finder";
-import type { EmailType, ProspectStatus } from "@prisma/client";
+import type { EmailStatus, EmailType, ProspectStatus } from "@prisma/client";
 
 const FOLLOWUP_DAYS = [4, 7, 12] as const;
+const SENT_LIKE_STATUSES: EmailStatus[] = ["SENT", "DELIVERED", "OPENED"];
+
+export interface FollowupItem {
+  prospectId: string;
+  prospectName: string;
+  daysSince: number;
+  nextFollowup: EmailType | null;
+  action: "sent" | "due" | "skipped";
+  reason?: string;
+}
+
+export interface FollowupResult {
+  enabled: boolean;
+  processed: number;
+  scanned: number;
+  due: number;
+  items: FollowupItem[];
+}
 
 export async function auditProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUniqueOrThrow({
@@ -188,11 +206,19 @@ export async function sendProspectEmail(emailId: string) {
   return result;
 }
 
-export async function processFollowups() {
+export async function processFollowups(options?: {
+  dryRun?: boolean;
+}): Promise<FollowupResult> {
   const settings = await getSettings();
-  if (!settings.followupEnabled) return { processed: 0 };
+  const dryRun = options?.dryRun ?? false;
+
+  if (!settings.followupEnabled) {
+    return { enabled: false, processed: 0, scanned: 0, due: 0, items: [] };
+  }
 
   let processed = 0;
+  let due = 0;
+  const items: FollowupItem[] = [];
   const now = new Date();
 
   const contacted = await prisma.prospect.findMany({
@@ -201,35 +227,118 @@ export async function processFollowups() {
       email: { not: null },
     },
     include: {
-      emails: {
-        where: { status: "SENT" },
-        orderBy: { sentAt: "asc" },
-      },
+      emails: { orderBy: { sentAt: "asc" } },
       replies: true,
     },
   });
 
   for (const prospect of contacted) {
-    if (prospect.replies.length > 0) continue;
+    if (prospect.replies.length > 0) {
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        daysSince: 0,
+        nextFollowup: null,
+        action: "skipped",
+        reason: "Réponse reçue",
+      });
+      continue;
+    }
 
-    const initial = prospect.emails.find((e) => e.type === "INITIAL");
-    if (!initial?.sentAt) continue;
+    const initial = prospect.emails.find(
+      (e) =>
+        e.type === "INITIAL" &&
+        e.sentAt &&
+        (SENT_LIKE_STATUSES.includes(e.status) || e.status === "REPLIED")
+    );
+    if (!initial?.sentAt) {
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        daysSince: 0,
+        nextFollowup: null,
+        action: "skipped",
+        reason: "Email initial non envoyé",
+      });
+      continue;
+    }
 
     const daysSince = daysBetween(initial.sentAt, now);
-    const sentTypes = new Set(prospect.emails.map((e) => e.type));
+    const sentTypes = new Set(
+      prospect.emails
+        .filter((e) => e.status !== "DRAFT" && e.status !== "FAILED")
+        .map((e) => e.type)
+    );
+
+    let matched = false;
 
     for (const day of FOLLOWUP_DAYS) {
       const type = `FOLLOWUP_J${day}` as EmailType;
       if (daysSince >= day && !sentTypes.has(type)) {
-        const draft = await generateAndSaveEmail(prospect.id, type);
-        await sendProspectEmail(draft.id);
-        processed++;
+        due++;
+        if (dryRun) {
+          items.push({
+            prospectId: prospect.id,
+            prospectName: prospect.name,
+            daysSince,
+            nextFollowup: type,
+            action: "due",
+          });
+        } else {
+          try {
+            const draft = await generateAndSaveEmail(prospect.id, type);
+            await sendProspectEmail(draft.id);
+            processed++;
+            items.push({
+              prospectId: prospect.id,
+              prospectName: prospect.name,
+              daysSince,
+              nextFollowup: type,
+              action: "sent",
+            });
+          } catch (err) {
+            items.push({
+              prospectId: prospect.id,
+              prospectName: prospect.name,
+              daysSince,
+              nextFollowup: type,
+              action: "skipped",
+              reason:
+                err instanceof Error ? err.message : "Erreur lors de l'envoi",
+            });
+          }
+        }
+        matched = true;
         break;
       }
     }
+
+    if (!matched) {
+      const nextDay = FOLLOWUP_DAYS.find(
+        (day) => daysSince < day && !sentTypes.has(`FOLLOWUP_J${day}` as EmailType)
+      );
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        daysSince,
+        nextFollowup: nextDay
+          ? (`FOLLOWUP_J${nextDay}` as EmailType)
+          : null,
+        action: "skipped",
+        reason: nextDay
+          ? `Prochaine relance dans ${nextDay - daysSince} jour(s)`
+          : "Séquence terminée",
+      });
+    }
   }
 
-  return { processed };
+  return {
+    enabled: true,
+    processed,
+    scanned: contacted.length,
+    due: dryRun ? due : processed,
+    items,
+  };
 }
 
 export async function importSearchResults(input: {
