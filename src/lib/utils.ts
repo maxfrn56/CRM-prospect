@@ -107,6 +107,8 @@ export function statusBadgeClass(status: string): string {
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "CONTACTED":
       return "border-blue-200 bg-blue-50 text-blue-700";
+    case "AUDITED":
+      return "border-violet-200 bg-violet-50 text-violet-700";
     case "REPLIED":
     case "WARM":
       return "border-amber-200 bg-amber-50 text-amber-700";
@@ -116,5 +118,24 @@ export function statusBadgeClass(status: string): string {
       return "border-emerald-300 bg-emerald-100 text-emerald-800";
     default:
       return "border-stone-200 bg-stone-50 text-stone-600";
+  }
+}
+
+/** Teinte de fond légère pour les lignes du tableau prospects */
+export function prospectRowTintClass(
+  status: string,
+  expanded = false
+): string {
+  switch (status) {
+    case "AUDITED":
+      return expanded
+        ? "bg-violet-50/80"
+        : "bg-violet-50/35 hover:bg-violet-50/55";
+    case "CONTACTED":
+      return expanded
+        ? "bg-blue-50/80"
+        : "bg-blue-50/35 hover:bg-blue-50/55";
+    default:
+      return expanded ? "bg-stone-50" : "hover:bg-stone-50";
   }
 }

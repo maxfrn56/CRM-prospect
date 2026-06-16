@@ -7,6 +7,8 @@ import {
   scoreColor,
   statusLabel,
   contactChannelLabel,
+  statusBadgeClass,
+  prospectRowTintClass,
 } from "@/lib/utils";
 import {
   ChevronDown,
@@ -114,7 +116,7 @@ export function ProspectTableRow({
 
   return (
     <>
-      <tr className={expanded ? "bg-stone-50" : "hover:bg-stone-50"}>
+      <tr className={prospectRowTintClass(prospect.status, expanded)}>
         <td className="w-10 px-3 py-3">
           <button
             type="button"
@@ -153,7 +155,7 @@ export function ProspectTableRow({
           )}
         </td>
         <td className="px-5 py-3">
-          <Badge className="border-stone-200 bg-stone-50 text-stone-600">
+          <Badge className={statusBadgeClass(prospect.status)}>
             {statusLabel(prospect.status)}
           </Badge>
           {prospect.contactChannel && (
@@ -173,7 +175,7 @@ export function ProspectTableRow({
       </tr>
 
       {expanded && (
-        <tr className="bg-stone-50">
+        <tr className={prospectRowTintClass(prospect.status, true)}>
           <td colSpan={7} className="border-t border-stone-100 px-5 py-4">
             {loadingDetail ? (
               <div className="flex items-center gap-2 text-sm text-stone-500">
