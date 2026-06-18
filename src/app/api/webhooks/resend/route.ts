@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       bodyText,
       bodyHtml,
       to: received.to,
+      subject: received.subject,
     });
 
     if (!prospect) {
@@ -59,7 +60,10 @@ export async function POST(req: NextRequest) {
     }
 
     const lastEmail = await prisma.email.findFirst({
-      where: { prospectId: prospect.id, status: { in: ["SENT", "REPLIED"] } },
+      where: {
+        prospectId: prospect.id,
+        status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+      },
       orderBy: { sentAt: "desc" },
     });
 
@@ -147,6 +151,7 @@ async function findProspect(input: {
   bodyText: string;
   bodyHtml: string;
   to: string[];
+  subject?: string;
 }) {
   const fromEmail = extractEmailAddress(input.from);
   const combined = `${input.bodyHtml} ${input.bodyText}`;
@@ -173,10 +178,12 @@ async function findProspect(input: {
   });
   if (byEmail) return byEmail;
 
-  // Dernier prospect contacté avec cet email
+  const bySubject = await findProspectByReplySubject(input.subject);
+  if (bySubject) return bySubject;
+
   const recentEmail = await prisma.email.findFirst({
     where: {
-      status: { in: ["SENT", "REPLIED"] },
+      status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
       prospect: { email: { equals: fromEmail, mode: "insensitive" } },
     },
     orderBy: { sentAt: "desc" },
@@ -184,6 +191,25 @@ async function findProspect(input: {
   });
 
   return recentEmail?.prospect ?? null;
+}
+
+async function findProspectByReplySubject(subject: string | undefined) {
+  if (!subject?.trim()) return null;
+
+  const normalized = subject.replace(/^(re|fw|fwd):\s*/gi, "").trim();
+  if (normalized.length < 8) return null;
+
+  const sent = await prisma.email.findFirst({
+    where: {
+      subject: { equals: normalized, mode: "insensitive" },
+      type: { in: ["INITIAL", "FOLLOWUP_J4", "FOLLOWUP_J7", "FOLLOWUP_J12"] },
+      status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+    },
+    orderBy: { sentAt: "desc" },
+    include: { prospect: true },
+  });
+
+  return sent?.prospect ?? null;
 }
 
 function stripHtml(html: string) {

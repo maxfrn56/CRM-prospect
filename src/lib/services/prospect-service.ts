@@ -11,6 +11,15 @@ import type { EmailStatus, EmailType, ProspectStatus } from "@prisma/client";
 const FOLLOWUP_DAYS = [4, 7, 12] as const;
 const SENT_LIKE_STATUSES: EmailStatus[] = ["SENT", "DELIVERED", "OPENED"];
 
+/** Statuts qui ne doivent jamais recevoir de relance automatique */
+const FOLLOWUP_BLOCKED_STATUSES: ProspectStatus[] = [
+  "COLD",
+  "HOT",
+  "REPLIED",
+  "CONVERTED",
+  "ARCHIVED",
+];
+
 export interface FollowupItem {
   prospectId: string;
   prospectName: string;
@@ -206,6 +215,48 @@ export async function sendProspectEmail(emailId: string) {
   return result;
 }
 
+type ProspectFollowupCheck = {
+  status: ProspectStatus;
+  replyClass: string | null;
+  replies: { id: string }[];
+  emails: { status: EmailStatus }[];
+};
+
+export function getFollowupBlockReason(
+  prospect: ProspectFollowupCheck
+): string | null {
+  if (FOLLOWUP_BLOCKED_STATUSES.includes(prospect.status)) {
+    return `Statut « ${prospect.status} » — relances désactivées`;
+  }
+  if (prospect.status !== "CONTACTED") {
+    return `Statut « ${prospect.status} » — hors séquence de relance`;
+  }
+  if (prospect.replyClass) {
+    return `Réponse classée (${prospect.replyClass})`;
+  }
+  if (prospect.replies.length > 0) {
+    return "Réponse prospect enregistrée";
+  }
+  if (prospect.emails.some((e) => e.status === "REPLIED")) {
+    return "Email initial marqué comme répondu";
+  }
+  return null;
+}
+
+async function getFollowupBlockReasonById(
+  prospectId: string
+): Promise<string | null> {
+  const prospect = await prisma.prospect.findUnique({
+    where: { id: prospectId },
+    include: {
+      replies: { select: { id: true }, take: 1 },
+      emails: { select: { status: true } },
+    },
+  });
+  if (!prospect) return "Prospect introuvable";
+  return getFollowupBlockReason(prospect);
+}
+
 export async function processFollowups(options?: {
   dryRun?: boolean;
 }): Promise<FollowupResult> {
@@ -225,6 +276,11 @@ export async function processFollowups(options?: {
     where: {
       status: "CONTACTED",
       email: { not: null },
+      replyClass: null,
+      replies: { none: {} },
+      NOT: {
+        emails: { some: { status: "REPLIED" } },
+      },
     },
     include: {
       emails: { orderBy: { sentAt: "asc" } },
@@ -233,14 +289,15 @@ export async function processFollowups(options?: {
   });
 
   for (const prospect of contacted) {
-    if (prospect.replies.length > 0) {
+    const blockReason = getFollowupBlockReason(prospect);
+    if (blockReason) {
       items.push({
         prospectId: prospect.id,
         prospectName: prospect.name,
         daysSince: 0,
         nextFollowup: null,
         action: "skipped",
-        reason: "Réponse reçue",
+        reason: blockReason,
       });
       continue;
     }
@@ -286,6 +343,21 @@ export async function processFollowups(options?: {
           });
         } else {
           try {
+            const blockBeforeSend = await getFollowupBlockReasonById(
+              prospect.id
+            );
+            if (blockBeforeSend) {
+              items.push({
+                prospectId: prospect.id,
+                prospectName: prospect.name,
+                daysSince,
+                nextFollowup: type,
+                action: "skipped",
+                reason: blockBeforeSend,
+              });
+              break;
+            }
+
             const draft = await generateAndSaveEmail(prospect.id, type);
             await sendProspectEmail(draft.id);
             processed++;

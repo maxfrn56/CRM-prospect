@@ -6,7 +6,7 @@ import {
 } from "@/lib/services/prospect-service";
 import { findEmailForProspect } from "@/lib/enrichment";
 import { prisma } from "@/lib/db";
-import type { ContactChannel, ProspectStatus } from "@prisma/client";
+import type { ContactChannel, ProspectStatus, ReplyClassification } from "@prisma/client";
 import {
   getLatestMockupJob,
   launchMockupForProspect,
@@ -183,6 +183,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   let emailUpdate: string | null | undefined;
   let enrichmentSourceUpdate: string | undefined;
+  let replyClassUpdate: ReplyClassification | undefined;
+
+  if (
+    data.status !== undefined &&
+    data.status !== current.status &&
+    ["COLD", "HOT", "REPLIED"].includes(data.status)
+  ) {
+    replyClassUpdate =
+      data.status === "COLD"
+        ? "COLD"
+        : data.status === "HOT"
+          ? "HOT"
+          : (current.replyClass ?? "WARM");
+  }
 
   if (data.email !== undefined) {
     const trimmed = data.email?.trim().toLowerCase() || null;
@@ -215,6 +229,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         : {}),
       ...(data.contactNotes !== undefined
         ? { contactNotes: data.contactNotes }
+        : {}),
+      ...(replyClassUpdate !== undefined
+        ? { replyClass: replyClassUpdate }
         : {}),
       ...(becameContacted && !current.contactedAt
         ? { contactedAt: new Date() }
