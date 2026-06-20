@@ -7,7 +7,6 @@ import { PageHeader, Card, Badge, Button } from "@/components/ui";
 import {
   scoreColor,
   statusLabel,
-  replyClassLabel,
   formatDate,
   contactChannelLabel,
   PROSPECT_STATUSES,
@@ -19,6 +18,10 @@ import {
   MockupSection,
   type MockupJobSummary,
 } from "@/components/prospects/mockup-section";
+import {
+  ProspectEmailList,
+  ProspectReplyList,
+} from "@/components/prospects/email-message-list";
 
 interface AuditDetails {
   score: number;
@@ -65,6 +68,7 @@ interface ProspectDetail {
     status: string;
     sentAt: string | null;
     bodyHtml: string;
+    bodyText?: string | null;
   }[];
   replies: {
     id: string;
@@ -72,6 +76,8 @@ interface ProspectDetail {
     aiSummary: string | null;
     wantsMockup?: boolean;
     bodyText: string;
+    bodyHtml?: string | null;
+    subject?: string | null;
     receivedAt: string;
   }[];
   latestMockupJob?: MockupJobSummary | null;
@@ -557,26 +563,14 @@ export default function ProspectDetailPage() {
 
           <Card>
             <div className="border-b border-stone-200 px-5 py-4">
-              <h3 className="text-sm font-semibold text-stone-900">Emails</h3>
-            </div>
-            {prospect.emails.length === 0 ? (
-              <p className="p-5 text-sm text-stone-500">
-                Aucun email envoyé via l&apos;app
+              <h3 className="text-sm font-semibold text-stone-900">
+                Emails envoyés
+              </h3>
+              <p className="mt-0.5 text-xs text-stone-500">
+                Contenu des messages passés par Resend
               </p>
-            ) : (
-              <ul className="divide-y divide-stone-100">
-                {prospect.emails.map((e) => (
-                  <li key={e.id} className="px-5 py-4">
-                    <p className="text-sm font-medium text-stone-900">
-                      {e.subject}
-                    </p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {e.status} · {formatDate(e.sentAt)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            </div>
+            <ProspectEmailList emails={prospect.emails} />
           </Card>
 
           {prospect.replies.length > 0 && (
@@ -586,22 +580,7 @@ export default function ProspectDetailPage() {
                   Réponses reçues
                 </h3>
               </div>
-              <ul className="divide-y divide-stone-100">
-                {prospect.replies.map((r) => (
-                  <li key={r.id} className="px-5 py-4">
-                    <Badge
-                      className={
-                        r.classification === "HOT"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-stone-200 bg-stone-50 text-stone-600"
-                      }
-                    >
-                      {replyClassLabel(r.classification)}
-                    </Badge>
-                    <p className="mt-2 text-sm text-stone-700">{r.aiSummary}</p>
-                  </li>
-                ))}
-              </ul>
+              <ProspectReplyList replies={prospect.replies} />
             </Card>
           )}
         </div>
