@@ -36,6 +36,15 @@ export function isVisualAuditEnabled(): boolean {
   return visualAuditEnabled();
 }
 
+function resolvePlaywrightBrowsersPath(): void {
+  if (process.env.PLAYWRIGHT_BROWSERS_PATH) return;
+
+  const dockerPath = "/app/.playwright-browsers";
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_ID) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = dockerPath;
+  }
+}
+
 function classifyCaptureError(err: unknown): ScreenshotCaptureError {
   const message = err instanceof Error ? err.message : String(err);
 
@@ -47,7 +56,7 @@ function classifyCaptureError(err: unknown): ScreenshotCaptureError {
     return {
       code: "browser_missing",
       message:
-        "Chromium indisponible sur le serveur (Playwright non installé ou mal configuré sur Railway).",
+        "Chromium indisponible — le déploiement Docker Railway est requis (voir Dockerfile).",
     };
   }
 
@@ -104,6 +113,37 @@ async function navigatePage(
   throw lastError ?? new Error("Navigation impossible");
 }
 
+async function launchBrowser() {
+  const { chromium } = await import("playwright");
+
+  resolvePlaywrightBrowsersPath();
+
+  const wsEndpoint = process.env.PLAYWRIGHT_WS_ENDPOINT?.trim();
+  if (wsEndpoint) {
+    return chromium.connect(wsEndpoint, { timeout: 30_000 });
+  }
+
+  const launchOptions: Parameters<typeof chromium.launch>[0] = {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--font-render-hinting=none",
+    ],
+  };
+
+  const executablePath =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
+  if (executablePath) {
+    launchOptions.executablePath = executablePath;
+  }
+
+  return chromium.launch(launchOptions);
+}
+
 export async function captureWebsiteScreenshots(
   rawUrl: string
 ): Promise<ScreenshotCaptureResult> {
@@ -118,27 +158,7 @@ export async function captureWebsiteScreenshots(
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 
   try {
-    const { chromium } = await import("playwright");
-
-    const launchOptions: Parameters<typeof chromium.launch>[0] = {
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer",
-        "--font-render-hinting=none",
-      ],
-    };
-
-    const executablePath =
-      process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
-    if (executablePath) {
-      launchOptions.executablePath = executablePath;
-    }
-
-    const browser = await chromium.launch(launchOptions);
+    const browser = await launchBrowser();
 
     try {
       const context = await browser.newContext({
@@ -199,7 +219,13 @@ export async function captureWebsiteScreenshots(
     }
   } catch (err) {
     const error = classifyCaptureError(err);
-    console.error("[screenshot-capture]", url, error.code, error.message);
+    console.error(
+      "[screenshot-capture]",
+      url,
+      error.code,
+      error.message,
+      process.env.PLAYWRIGHT_BROWSERS_PATH ?? "no-browsers-path"
+    );
     return { ok: false, error };
   }
 }

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "sh scripts/prisma-generate.sh && (npx playwright install chromium || echo 'Playwright chromium install skipped')",
+    "postinstall": "sh scripts/prisma-generate.sh",
+    "playwright:install": "npx playwright install chromium",
     "build": "next build",
     "start": "sh scripts/railway-start.sh",
     "lint": "next lint",
