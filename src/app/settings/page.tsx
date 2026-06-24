@@ -215,16 +215,6 @@ export default function SettingsPage() {
                   {settings.website && (
                     <p className="text-stone-600">{settings.website}</p>
                   )}
-                  {(resendHealth?.replyTo || settings.senderEmail) && (
-                    <p className="text-stone-600">
-                      {resendHealth?.replyTo || settings.senderEmail}
-                      {resendHealth?.replyTo && (
-                        <span className="ml-1 text-[10px] text-stone-400">
-                          (Reply-To Resend)
-                        </span>
-                      )}
-                    </p>
-                  )}
                 </div>
               </div>
             )}

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { auditWebsite, type AuditResult } from "@/lib/audit/website-audit";
 import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
-import { sendEmail, appendProspectTracking, getResendReplyToEmail } from "@/lib/email/resend";
+import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
 import { loadCnbAnnuaire } from "@/lib/enrichment/cnb-annuaire";
@@ -159,8 +159,6 @@ export async function generateAndSaveEmail(
       companyName: settings.companyName,
       phone: settings.phone || undefined,
       website: settings.website || undefined,
-      // Toujours l'adresse Resend inbound — pas l'email Zimbra perso des paramètres
-      senderEmail: getResendReplyToEmail(),
     }
   );
 
