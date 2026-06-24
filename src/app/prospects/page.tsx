@@ -8,7 +8,7 @@ import {
   type Campaign,
 } from "@/components/prospects/campaign-sidebar";
 import { ProspectTableRow } from "@/components/prospects/prospect-table-row";
-import { ArrowUpDown, Loader2 } from "lucide-react";
+import { ArrowUpDown, Loader2, Mail } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -36,6 +36,9 @@ function ProspectsContent() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(false);
   const [auditing, setAuditing] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkEligibleCount, setBulkEligibleCount] = useState(0);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [importStatus, setImportStatus] = useState<string | null>(
     isImporting ? "Import en cours…" : null
@@ -64,7 +67,13 @@ function ProspectsContent() {
 
     return fetch(`/api/prospects?${params}`)
       .then((r) => r.json())
-      .then(setProspects);
+      .then(setProspects)
+      .then(() =>
+        fetch(`/api/campaigns/${campaignId}/send-emails?minScore=30`)
+          .then((r) => r.json())
+          .then((d) => setBulkEligibleCount(d.count ?? 0))
+          .catch(() => setBulkEligibleCount(0))
+      );
   }, [campaignId, filter]);
 
   useEffect(() => {
@@ -110,9 +119,47 @@ function ProspectsContent() {
   async function auditAll() {
     if (!campaignId) return;
     setAuditing(true);
+    setBulkResult(null);
     await fetch(`/api/campaigns/${campaignId}/audit`, { method: "POST" });
     await loadProspects();
     setAuditing(false);
+  }
+
+  async function sendBulkEmails() {
+    if (!campaignId || bulkEligibleCount === 0) return;
+
+    const ok = window.confirm(
+      `Envoyer un email initial à ${bulkEligibleCount} prospect(s) ` +
+        `(score > 30, email connu, pas encore contactés) ?\n\n` +
+        "Chaque message sera généré par Gemini puis envoyé via Resend."
+    );
+    if (!ok) return;
+
+    setBulkSending(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/send-emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minScore: 30 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBulkResult(data.error ?? "Envoi groupé échoué");
+        return;
+      }
+      setBulkResult(
+        `${data.sent} email(s) envoyé(s), ${data.skipped} ignoré(s) sur ${data.scanned} éligible(s).`
+      );
+      await loadProspects();
+      fetch("/api/campaigns")
+        .then((r) => r.json())
+        .then(setCampaigns);
+    } catch {
+      setBulkResult("Erreur réseau lors de l'envoi groupé");
+    } finally {
+      setBulkSending(false);
+    }
   }
 
   async function deleteCampaign(id: string) {
@@ -156,17 +203,48 @@ function ProspectsContent() {
           }
         >
           {campaignId && (
-            <Button
-              variant="secondary"
-              onClick={auditAll}
-              disabled={auditing || loading}
-            >
-              {auditing ? "Audit en cours…" : "Auditer tous"}
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={auditAll}
+                disabled={auditing || loading || bulkSending}
+              >
+                {auditing ? "Audit en cours…" : "Auditer tous"}
+              </Button>
+              <Button
+                onClick={sendBulkEmails}
+                disabled={
+                  bulkSending || loading || auditing || bulkEligibleCount === 0
+                }
+                title={
+                  bulkEligibleCount === 0
+                    ? "Aucun prospect avec score > 30 et email"
+                    : undefined
+                }
+              >
+                {bulkSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Envoi en cours…
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Envoyer emails ({bulkEligibleCount})
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </PageHeader>
 
         <div className="p-8">
+          {bulkResult && (
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {bulkResult}
+            </div>
+          )}
+
           {importStatus && (
             <div className="mb-4 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
               <Loader2 className="h-4 w-4 animate-spin" />

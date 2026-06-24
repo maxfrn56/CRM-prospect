@@ -186,6 +186,106 @@ async function tryAutoOutreachAfterAudit(
   }
 }
 
+export interface BulkSendEmailItem {
+  prospectId: string;
+  prospectName: string;
+  action: "sent" | "skipped";
+  reason?: string;
+}
+
+export interface BulkSendEmailsResult {
+  minScore: number;
+  scanned: number;
+  sent: number;
+  skipped: number;
+  items: BulkSendEmailItem[];
+}
+
+const BULK_SEND_SKIP_STATUSES: ProspectStatus[] = [
+  "CONTACTED",
+  "REPLIED",
+  "HOT",
+  "CONVERTED",
+  "ARCHIVED",
+];
+
+export async function bulkSendEmailsInCampaign(
+  campaignId: string,
+  options?: { minScore?: number }
+): Promise<BulkSendEmailsResult> {
+  const minScore = options?.minScore ?? 30;
+
+  const prospects = await prisma.prospect.findMany({
+    where: {
+      campaignId,
+      auditScore: { gt: minScore },
+      email: { not: null },
+      NOT: { email: "" },
+      status: { notIn: BULK_SEND_SKIP_STATUSES },
+    },
+    select: { id: true, name: true },
+    orderBy: { auditScore: "desc" },
+  });
+
+  const items: BulkSendEmailItem[] = [];
+  let sent = 0;
+
+  for (const prospect of prospects) {
+    const existingSent = await prisma.email.findFirst({
+      where: {
+        prospectId: prospect.id,
+        type: "INITIAL",
+        status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+      },
+    });
+
+    if (existingSent) {
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        action: "skipped",
+        reason: "Email initial déjà envoyé",
+      });
+      continue;
+    }
+
+    try {
+      const existingDraft = await prisma.email.findFirst({
+        where: { prospectId: prospect.id, type: "INITIAL", status: "DRAFT" },
+        orderBy: { createdAt: "desc" },
+      });
+      const emailId = existingDraft
+        ? existingDraft.id
+        : (await generateAndSaveEmail(prospect.id, "INITIAL")).id;
+
+      await sendProspectEmail(emailId);
+      sent++;
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        action: "sent",
+      });
+    } catch (err) {
+      items.push({
+        prospectId: prospect.id,
+        prospectName: prospect.name,
+        action: "skipped",
+        reason: err instanceof Error ? err.message : "Erreur d'envoi",
+      });
+    }
+
+    await sleep(1200);
+  }
+
+  return {
+    minScore,
+    scanned: prospects.length,
+    sent,
+    skipped: items.length - sent,
+    items,
+  };
+}
+
 export async function auditAllInCampaign(campaignId: string) {
   const campaign = await prisma.searchCampaign.findUnique({
     where: { id: campaignId },
