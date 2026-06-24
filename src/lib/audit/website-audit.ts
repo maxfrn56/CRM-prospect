@@ -81,6 +81,17 @@ export async function auditWebsite(
   const opportunities: string[] = [];
 
   if (!rawUrl || rawUrl.trim() === "") {
+    let facebookUrl: string | null = null;
+    if (options?.businessName) {
+      const { findFacebookPageBySearch } = await import(
+        "@/lib/enrichment/facebook-email-finder"
+      );
+      facebookUrl = await findFacebookPageBySearch(
+        options.businessName,
+        options.activity
+      );
+    }
+
     return {
       score: 95,
       technicalScore: 95,
@@ -92,9 +103,12 @@ export async function auditWebsite(
       outdatedDesign: false,
       missingMetaDescription: true,
       instagramUrl: null,
-      facebookUrl: null,
+      facebookUrl,
       visual: null,
-      issues: ["Aucun site web référencé"],
+      issues: [
+        "Aucun site web référencé",
+        ...(facebookUrl ? [] : ["Page Facebook non trouvée automatiquement"]),
+      ],
       opportunities: [
         "Création de site vitrine professionnel",
         "Présence en ligne inexistante — forte opportunité commerciale",

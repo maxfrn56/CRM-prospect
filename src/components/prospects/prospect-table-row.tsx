@@ -293,23 +293,21 @@ export function ProspectTableRow({
                             "Chercher email"
                           )}
                         </Button>
-                        {audit?.facebookUrl && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => runAction("find-facebook")}
-                            disabled={!!actionLoading}
-                          >
-                            {actionLoading === "find-facebook" ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <>
-                                <Facebook className="mr-1 h-3 w-3" />
-                                Via Facebook
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => runAction("find-facebook")}
+                          disabled={!!actionLoading}
+                        >
+                          {actionLoading === "find-facebook" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <>
+                              <Facebook className="mr-1 h-3 w-3" />
+                              Via Facebook
+                            </>
+                          )}
+                        </Button>
                       </>
                     )}
                   </div>

@@ -1,4 +1,12 @@
 import * as cheerio from "cheerio";
+import { fetchHtmlWithBrowser } from "@/lib/browser/playwright-client";
+import {
+  cleanEmail,
+  extractEmailsFromHtml,
+  isBlockedLocal,
+  isPlatformEmail,
+  isValidEmail,
+} from "@/lib/email-finder/email-utils";
 
 export interface EmailFinderResult {
   email: string | null;
@@ -24,47 +32,8 @@ const CONTACT_PATHS = [
   "/about",
   "/about-us",
   "/equipe",
-];
-
-const BLOCKED_DOMAINS = [
-  "wixpress.com",
-  "sentry.io",
-  "example.com",
-  "domain.com",
-  "email.com",
-  "yoursite.com",
-  "wordpress.com",
-  "gravatar.com",
-  "facebook.com",
-  "instagram.com",
-  "google.com",
-  "gmail.com",
-  "yahoo.com",
-  "hotmail.com",
-  "outlook.com",
-  "orange.fr",
-  "free.fr",
-  "laposte.net",
-  "sentry-next.wixpress.com",
-  "u003e",
-  "2x.png",
-];
-
-const BLOCKED_LOCALS = [
-  "noreply",
-  "no-reply",
-  "donotreply",
-  "do-not-reply",
-  "postmaster",
-  "webmaster",
-  "admin",
-  "support",
-  "newsletter",
-  "marketing",
-  "unsubscribe",
-  "privacy",
-  "abuse",
-  "mailer-daemon",
+  "/infos-pratiques",
+  "/coordonnees",
 ];
 
 const PRIORITY_LOCALS = [
@@ -81,8 +50,12 @@ const PRIORITY_LOCALS = [
   "reservation",
 ];
 
-const EMAIL_REGEX =
-  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const FETCH_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+};
 
 export async function findEmailOnWebsite(
   rawUrl: string | null | undefined
@@ -103,7 +76,6 @@ export async function findEmailOnWebsite(
   const found = new Map<string, { url: string; score: number }>();
 
   const urlsToVisit = new Set<string>([baseUrl]);
-
   for (const path of CONTACT_PATHS) {
     urlsToVisit.add(joinUrl(baseUrl, path));
   }
@@ -118,7 +90,19 @@ export async function findEmailOnWebsite(
     if (url === baseUrl && homepage) continue;
     const html = await fetchHtml(url);
     if (html) collectFromHtml(html, url, domain, found);
-    await sleep(200);
+    await sleep(180);
+  }
+
+  // Fallback Playwright sur pages contact si rien trouvé
+  if (found.size === 0) {
+    const priorityUrls = [...urlsToVisit].filter((u) =>
+      /contact|mention|legal|about|propos|coordonnee/i.test(u)
+    );
+    for (const url of priorityUrls.slice(0, 4)) {
+      const html = await fetchHtmlWithBrowser(url);
+      if (html) collectFromHtml(html, url, domain, found);
+      if (found.size > 0) break;
+    }
   }
 
   const candidates = [...found.entries()]
@@ -147,22 +131,18 @@ function collectFromHtml(
 
   $('a[href^="mailto:"]').each((_, el) => {
     const href = $(el).attr("href") ?? "";
-    const addr = href.replace(/^mailto:/i, "").split("?")[0].trim();
-    if (addr) emails.add(addr.toLowerCase());
+    const addr = cleanEmail(href.replace(/^mailto:/i, "").split("?")[0]);
+    if (addr) emails.add(addr);
   });
 
-  const text = $("body").text().replace(/\s+/g, " ");
-  const htmlSource = $.html();
-  for (const source of [text, htmlSource]) {
-    const matches = source.match(EMAIL_REGEX) ?? [];
-    for (const m of matches) emails.add(m.toLowerCase());
-  }
+  for (const e of extractEmailsFromHtml(html)) emails.add(e);
 
   const pageBonus = pageScore(pageUrl);
 
   for (const raw of emails) {
     const email = cleanEmail(raw);
     if (!email || !isValidEmail(email)) continue;
+    if (isPlatformEmail(email) || isBlockedLocal(email)) continue;
 
     const score = scoreEmail(email, siteDomain, pageBonus);
     if (score <= 0) continue;
@@ -178,7 +158,7 @@ function discoverContactLinks(html: string, baseUrl: string): string[] {
   const $ = cheerio.load(html);
   const links: string[] = [];
   const keywords =
-    /contact|mention|legal|nous-contacter|contactez|about|apropos/i;
+    /contact|mention|legal|nous-contacter|contactez|about|apropos|coordonnee/i;
 
   $("a[href]").each((_, el) => {
     const href = $(el).attr("href") ?? "";
@@ -189,11 +169,11 @@ function discoverContactLinks(html: string, baseUrl: string): string[] {
       const absolute = new URL(href, baseUrl).toString();
       if (absolute.startsWith("http")) links.push(absolute.split("#")[0]);
     } catch {
-      // ignore invalid URLs
+      // ignore
     }
   });
 
-  return [...new Set(links)].slice(0, 8);
+  return [...new Set(links)].slice(0, 10);
 }
 
 function scoreEmail(
@@ -203,11 +183,6 @@ function scoreEmail(
 ): number {
   const [local, domain] = email.split("@");
   if (!local || !domain) return 0;
-
-  if (BLOCKED_DOMAINS.some((d) => domain.includes(d))) return 0;
-  if (BLOCKED_LOCALS.some((b) => local === b || local.startsWith(`${b}+`)))
-    return 0;
-  if (email.length > 60) return 0;
   if (/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(email)) return 0;
 
   let score = 30 + pageBonus;
@@ -234,26 +209,12 @@ function pageScore(url: string): number {
   return 0;
 }
 
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
-
-function cleanEmail(raw: string): string {
-  return raw
-    .replace(/mailto:/gi, "")
-    .replace(/\u200b/g, "")
-    .replace(/[>,;)}\]'"]+$/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 function normalizeUrl(raw: string): string | null {
   let url = raw.trim();
   if (!url) return null;
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   try {
-    const parsed = new URL(url);
-    return parsed.origin;
+    return new URL(url).origin;
   } catch {
     return null;
   }
@@ -269,8 +230,7 @@ function joinUrl(base: string, path: string): string {
 
 function extractDomain(url: string): string | null {
   try {
-    const host = new URL(url).hostname.replace(/^www\./, "");
-    return host || null;
+    return new URL(url).hostname.replace(/^www\./, "") || null;
   } catch {
     return null;
   }
@@ -279,27 +239,27 @@ function extractDomain(url: string): string | null {
 async function fetchHtml(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 12_000);
 
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; ProspectCRM-EmailFinder/1.0)",
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-      },
+      headers: FETCH_HEADERS,
     });
     clearTimeout(timeout);
 
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("text/plain"))
+    if (
+      !contentType.includes("text/html") &&
+      !contentType.includes("text/plain") &&
+      contentType !== ""
+    ) {
       return null;
+    }
 
     const html = await res.text();
-    return html.length > 500_000 ? html.slice(0, 500_000) : html;
+    return html.length > 600_000 ? html.slice(0, 600_000) : html;
   } catch {
     return null;
   }

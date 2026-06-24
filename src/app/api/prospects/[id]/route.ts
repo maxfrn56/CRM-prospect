@@ -89,6 +89,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       case "find-facebook": {
         const prospect = await prisma.prospect.findUniqueOrThrow({
           where: { id },
+          include: { campaign: true },
         });
         let facebookUrl: string | null = null;
         if (prospect.auditDetails) {
@@ -100,19 +101,14 @@ export async function POST(req: NextRequest, { params }: Params) {
             facebookUrl = null;
           }
         }
-        if (!facebookUrl) {
-          return NextResponse.json(
-            {
-              error:
-                "Aucune page Facebook détectée — lancez d'abord un audit du site.",
-            },
-            { status: 400 }
-          );
-        }
-        const { findEmailOnFacebook } = await import(
+        const { findEmailViaFacebookDiscovery } = await import(
           "@/lib/enrichment/facebook-email-finder"
         );
-        const found = await findEmailOnFacebook(facebookUrl);
+        const found = await findEmailViaFacebookDiscovery({
+          businessName: prospect.name,
+          city: prospect.city ?? prospect.campaign?.city,
+          knownFacebookUrl: facebookUrl,
+        });
         if (found.email) {
           await prisma.prospect.update({
             where: { id },

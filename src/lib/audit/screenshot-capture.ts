@@ -36,14 +36,7 @@ export function isVisualAuditEnabled(): boolean {
   return visualAuditEnabled();
 }
 
-function resolvePlaywrightBrowsersPath(): void {
-  if (process.env.PLAYWRIGHT_BROWSERS_PATH) return;
-
-  const dockerPath = "/app/.playwright-browsers";
-  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_ID) {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = dockerPath;
-  }
-}
+import { launchBrowser } from "@/lib/browser/playwright-client";
 
 function classifyCaptureError(err: unknown): ScreenshotCaptureError {
   const message = err instanceof Error ? err.message : String(err);
@@ -113,35 +106,8 @@ async function navigatePage(
   throw lastError ?? new Error("Navigation impossible");
 }
 
-async function launchBrowser() {
-  const { chromium } = await import("playwright");
-
-  resolvePlaywrightBrowsersPath();
-
-  const wsEndpoint = process.env.PLAYWRIGHT_WS_ENDPOINT?.trim();
-  if (wsEndpoint) {
-    return chromium.connect(wsEndpoint, { timeout: 30_000 });
-  }
-
-  const launchOptions: Parameters<typeof chromium.launch>[0] = {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-software-rasterizer",
-      "--font-render-hinting=none",
-    ],
-  };
-
-  const executablePath =
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
-  if (executablePath) {
-    launchOptions.executablePath = executablePath;
-  }
-
-  return chromium.launch(launchOptions);
+async function launchBrowserForCapture() {
+  return launchBrowser();
 }
 
 export async function captureWebsiteScreenshots(
@@ -158,7 +124,7 @@ export async function captureWebsiteScreenshots(
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 
   try {
-    const browser = await launchBrowser();
+    const browser = await launchBrowserForCapture();
 
     try {
       const context = await browser.newContext({

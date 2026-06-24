@@ -2,7 +2,7 @@ import { enrichFromSirene } from "./sirene";
 import { enrichFromPappers } from "./pappers";
 import { findEmailOnWebsite } from "@/lib/email-finder/website-email-finder";
 import { findEmailViaBarreau, isLawyerSector } from "./barreau-email-finder";
-import { findEmailOnFacebook } from "./facebook-email-finder";
+import { findEmailOnFacebook, findEmailViaFacebookDiscovery } from "./facebook-email-finder";
 import type { BusinessResult } from "@/lib/google-places/client";
 
 function parseFacebookFromAudit(auditDetails: string | null | undefined): string | null {
@@ -109,16 +109,33 @@ export async function findEmailForProspect(
   const onWebsite = await findEmailOnWebsite(website);
   if (onWebsite.email) return onWebsite;
 
-  const facebookUrl =
+  const knownFacebook =
     options?.facebookUrl ?? parseFacebookFromAudit(options?.auditDetails);
 
-  if (facebookUrl) {
-    const fb = await findEmailOnFacebook(facebookUrl);
+  if (options?.name) {
+    const fbDiscovery = await findEmailViaFacebookDiscovery({
+      businessName: options.name,
+      city: options.city,
+      knownFacebookUrl: knownFacebook,
+    });
+
+    if (fbDiscovery.email) {
+      return {
+        email: fbDiscovery.email,
+        candidates: fbDiscovery.candidates,
+        foundOn:
+          fbDiscovery.foundOn ??
+          `facebook:${fbDiscovery.facebookUrl ?? "discovered"}`,
+        confidence: fbDiscovery.confidence,
+      };
+    }
+  } else if (knownFacebook) {
+    const fb = await findEmailOnFacebook(knownFacebook);
     if (fb.email) {
       return {
         email: fb.email,
         candidates: fb.candidates,
-        foundOn: fb.foundOn ?? `facebook:${facebookUrl}`,
+        foundOn: fb.foundOn ?? `facebook:${knownFacebook}`,
         confidence: fb.confidence,
       };
     }
@@ -147,4 +164,9 @@ export async function findEmailForProspect(
   return onWebsite;
 }
 
-export { isLawyerSector, findEmailViaBarreau, findEmailOnFacebook };
+export { isLawyerSector, findEmailViaBarreau } from "./barreau-email-finder";
+export {
+  findEmailOnFacebook,
+  findEmailViaFacebookDiscovery,
+  findFacebookPageBySearch,
+} from "./facebook-email-finder";

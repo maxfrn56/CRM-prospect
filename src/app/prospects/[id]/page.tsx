@@ -428,7 +428,7 @@ export default function ProspectDetailPage() {
                   )}
                 </Button>
               )}
-              {!prospect.email && audit?.facebookUrl && (
+              {!prospect.email && (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -452,10 +452,10 @@ export default function ProspectDetailPage() {
                 annuaire CNB / barreau local.
               </p>
             )}
-            {!isLawyerCampaign && !prospect.email && audit?.facebookUrl && (
+            {!prospect.email && (
               <p className="mt-2 text-xs text-stone-500">
-                Page Facebook détectée — l&apos;email peut y figurer dans la
-                section « À propos ».
+                Recherche email : site web, puis page Facebook (recherche
+                automatique si pas de site), puis barreau pour les avocats.
               </p>
             )}
             {actionSuccess && (

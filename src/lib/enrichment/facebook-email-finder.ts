@@ -1,4 +1,16 @@
 import * as cheerio from "cheerio";
+import { fetchHtmlWithBrowser } from "@/lib/browser/playwright-client";
+import {
+  cleanEmail,
+  extractEmailsFromHtml,
+  extractEmailsFromJsonScripts,
+  extractEmailsFromText,
+  isBlockedLocal,
+  isPlatformEmail,
+  isValidEmail,
+  nameMatchScore,
+  normalizeBusinessName,
+} from "@/lib/email-finder/email-utils";
 
 export interface FacebookEmailResult {
   email: string | null;
@@ -7,6 +19,7 @@ export interface FacebookEmailResult {
   confidence: number;
   facebookUrl: string | null;
   blocked?: boolean;
+  discoveredVia?: "known" | "search" | "audit";
 }
 
 const FACEBOOK_SKIP = new Set([
@@ -40,26 +53,11 @@ const FACEBOOK_SKIP = new Set([
   "reg",
   "recover",
   "campaign",
+  "search",
+  "public",
 ]);
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-const BLOCKED_EMAIL_DOMAINS = [
-  "facebook.com",
-  "fb.com",
-  "meta.com",
-  "example.com",
-  "email.com",
-  "sentry.io",
-];
-
-const BLOCKED_LOCALS = [
-  "noreply",
-  "no-reply",
-  "donotreply",
-  "postmaster",
-  "webmaster",
-];
+const PRIORITY_LOCALS = ["contact", "info", "commercial", "direction", "accueil"];
 
 export function normalizeFacebookUrl(href: string): string | null {
   try {
@@ -82,8 +80,11 @@ export function normalizeFacebookUrl(href: string): string | null {
       if (first === "pages" && pathParts.length >= 2) {
         const slug = pathParts[pathParts.length - 1];
         if (slug && !FACEBOOK_SKIP.has(slug.toLowerCase())) {
-          return `https://www.facebook.com/${slug}`;
+          return `https://www.facebook.com/${slug}/`;
         }
+      }
+      if (first === "pg" && pathParts.length >= 2) {
+        return `https://www.facebook.com/${pathParts[1]}/`;
       }
       return null;
     }
@@ -121,8 +122,115 @@ export function extractFacebookFromHtml(html: string): string | null {
   return found.values().next().value ?? null;
 }
 
+/** Recherche une page Facebook via DuckDuckGo (sans site web connu). */
+export async function findFacebookPageBySearch(
+  businessName: string,
+  city?: string | null
+): Promise<string | null> {
+  const query = encodeURIComponent(
+    `site:facebook.com ${businessName} ${city ?? ""}`.trim()
+  );
+
+  const searchUrls = [
+    `https://html.duckduckgo.com/html/?q=${query}`,
+    `https://lite.duckduckgo.com/lite/?q=${query}`,
+  ];
+
+  for (const searchUrl of searchUrls) {
+    const html = await fetchSearchHtml(searchUrl);
+    if (!html) continue;
+
+    const candidates: { url: string; score: number }[] = [];
+
+    const regex =
+      /https?:\/\/(?:www\.|m\.)?facebook\.com\/[a-zA-Z0-9.\-_/]+/gi;
+    for (const match of html.matchAll(regex)) {
+      const normalized = normalizeFacebookUrl(match[0]);
+      if (!normalized) continue;
+
+      const slug = normalized.split("/").filter(Boolean).pop() ?? "";
+      const slugScore = nameMatchScore(slug.replace(/\./g, " "), businessName);
+      candidates.push({ url: normalized, score: slugScore });
+    }
+
+    const $ = cheerio.load(html);
+    $('a[href*="facebook.com"]').each((_, el) => {
+      const href = $(el).attr("href") ?? "";
+      const uddgMatch = href.match(/uddg=([^&]+)/);
+      if (uddgMatch) {
+        try {
+          const fbUrl = decodeURIComponent(uddgMatch[1]);
+          const normalized = normalizeFacebookUrl(fbUrl);
+          if (normalized) {
+            const slug = normalized.split("/").filter(Boolean).pop() ?? "";
+            candidates.push({
+              url: normalized,
+              score: nameMatchScore(slug.replace(/\./g, " "), businessName),
+            });
+          }
+        } catch {
+          // ignore
+        }
+        return;
+      }
+    });
+
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates.find((c) => c.score >= 40);
+    if (best) return best.url;
+    if (candidates[0]?.score >= 25) return candidates[0].url;
+  }
+
+  return null;
+}
+
+async function fetchSearchHtml(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+function buildFacebookPageUrls(facebookUrl: string): string[] {
+  const slug = facebookUrl.replace(/\/$/, "").split("/").pop() ?? "";
+  const isProfile = facebookUrl.includes("profile.php");
+
+  if (isProfile) {
+    return [
+      facebookUrl,
+      facebookUrl.replace("www.facebook.com", "m.facebook.com"),
+    ];
+  }
+
+  return [
+    `https://www.facebook.com/pg/${slug}/about/`,
+    `https://m.facebook.com/${slug}/about/`,
+    `https://www.facebook.com/${slug}/about/`,
+    `https://m.facebook.com/${slug}/`,
+    `https://www.facebook.com/${slug}/?sk=about`,
+    `https://m.facebook.com/${slug}/?sk=about`,
+    facebookUrl,
+    `${facebookUrl}about/`,
+  ];
+}
+
 export async function findEmailOnFacebook(
-  rawUrl: string | null | undefined
+  rawUrl: string | null | undefined,
+  options?: { businessName?: string; useBrowser?: boolean }
 ): Promise<FacebookEmailResult> {
   const empty: FacebookEmailResult = {
     email: null,
@@ -135,35 +243,26 @@ export async function findEmailOnFacebook(
   const facebookUrl = rawUrl ? normalizeFacebookUrl(rawUrl) : null;
   if (!facebookUrl) return empty;
 
-  const slug = facebookUrl.replace(/\/$/, "").split("/").pop() ?? "";
-  const isProfile = facebookUrl.includes("profile.php");
-
-  const urlsToTry = isProfile
-    ? [facebookUrl, facebookUrl.replace("www.facebook.com", "m.facebook.com")]
-    : [
-        `https://m.facebook.com/${slug}/about`,
-        `https://m.facebook.com/${slug}/`,
-        `${facebookUrl.replace("www.facebook.com", "m.facebook.com")}about`,
-        facebookUrl,
-        `${facebookUrl}about`,
-      ];
-
-  const uniqueUrls = [...new Set(urlsToTry)];
-
+  const urlsToTry = [...new Set(buildFacebookPageUrls(facebookUrl))];
   let blocked = false;
   const candidates = new Map<string, { url: string; score: number }>();
 
-  for (const pageUrl of uniqueUrls) {
-    const html = await fetchFacebookHtml(pageUrl);
-    if (!html) continue;
+  for (const pageUrl of urlsToTry) {
+    let html = await fetchFacebookHtml(pageUrl);
 
+    if (!html || isFacebookLoginWall(html)) {
+      blocked = blocked || Boolean(html && isFacebookLoginWall(html));
+      html = await fetchHtmlWithBrowser(pageUrl);
+    }
+
+    if (!html) continue;
     if (isFacebookLoginWall(html)) {
       blocked = true;
       continue;
     }
 
-    collectEmailsFromFacebookHtml(html, pageUrl, candidates);
-    await sleep(300);
+    collectEmailsFromFacebookHtml(html, pageUrl, candidates, options?.businessName);
+    await sleep(250);
   }
 
   const sorted = [...candidates.entries()].sort((a, b) => b[1].score - a[1].score);
@@ -187,40 +286,65 @@ export async function findEmailOnFacebook(
   };
 }
 
+/** Recherche page FB + email — pour entreprises sans site web. */
+export async function findEmailViaFacebookDiscovery(input: {
+  businessName: string;
+  city?: string | null;
+  knownFacebookUrl?: string | null;
+}): Promise<FacebookEmailResult & { facebookUrl: string | null }> {
+  const facebookUrl =
+    (input.knownFacebookUrl
+      ? normalizeFacebookUrl(input.knownFacebookUrl)
+      : null) ?? (await findFacebookPageBySearch(input.businessName, input.city));
+
+  if (!facebookUrl) {
+    return {
+      email: null,
+      candidates: [],
+      foundOn: null,
+      confidence: 0,
+      facebookUrl: null,
+      discoveredVia: undefined,
+    };
+  }
+
+  const result = await findEmailOnFacebook(facebookUrl, {
+    businessName: input.businessName,
+    useBrowser: true,
+  });
+
+  return {
+    ...result,
+    facebookUrl,
+    discoveredVia: input.knownFacebookUrl ? "known" : "search",
+  };
+}
+
 function collectEmailsFromFacebookHtml(
   html: string,
   pageUrl: string,
-  found: Map<string, { url: string; score: number }>
+  found: Map<string, { url: string; score: number }>,
+  businessName?: string
 ) {
-  const decoded = html
-    .replace(/\\u0040/gi, "@")
-    .replace(/&#64;/g, "@")
-    .replace(/&amp;/g, "&");
-
-  const $ = cheerio.load(decoded);
+  const $ = cheerio.load(html);
   const emails = new Set<string>();
 
   $('a[href^="mailto:"]').each((_, el) => {
-    const addr = ($(el).attr("href") ?? "")
-      .replace(/^mailto:/i, "")
-      .split("?")[0]
-      .trim()
-      .toLowerCase();
+    const addr = cleanEmail(($(el).attr("href") ?? "").replace(/^mailto:/i, "").split("?")[0]);
     if (addr) emails.add(addr);
   });
 
-  for (const source of [decoded, $("body").text()]) {
-    const matches = source.match(EMAIL_REGEX) ?? [];
-    for (const m of matches) emails.add(m.toLowerCase());
-  }
+  for (const e of extractEmailsFromHtml(html)) emails.add(e);
+  for (const e of extractEmailsFromJsonScripts(html)) emails.add(e);
+  for (const e of extractEmailsFromText($("body").text())) emails.add(e);
 
-  const pageBonus = pageUrl.includes("/about") ? 25 : 10;
+  const pageBonus = pageUrl.includes("/about") || pageUrl.includes("sk=about") ? 30 : 10;
 
   for (const raw of emails) {
     const email = cleanEmail(raw);
-    if (!isValidBusinessEmail(email)) continue;
+    if (!isValidEmail(email) || isPlatformEmail(email) || isBlockedLocal(email)) continue;
 
-    const score = scoreFacebookEmail(email, pageBonus);
+    const score = scoreFacebookEmail(email, pageBonus, businessName);
     if (score <= 0) continue;
 
     const existing = found.get(email);
@@ -230,64 +354,63 @@ function collectEmailsFromFacebookHtml(
   }
 }
 
-function scoreFacebookEmail(email: string, pageBonus: number): number {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return 0;
-  if (BLOCKED_EMAIL_DOMAINS.some((d) => domain.includes(d))) return 0;
-  if (BLOCKED_LOCALS.some((b) => local === b || local.startsWith(`${b}+`)))
-    return 0;
-  if (email.length > 60) return 0;
+function scoreFacebookEmail(
+  email: string,
+  pageBonus: number,
+  businessName?: string
+): number {
+  const local = email.split("@")[0]?.split("+")[0] ?? "";
+  let score = 40 + pageBonus;
 
-  let score = 35 + pageBonus;
-  if (local === "contact" || local === "info") score += 20;
+  if (PRIORITY_LOCALS.includes(local)) score += 25;
+  if (businessName) {
+    const domain = email.split("@")[1] ?? "";
+    const nameNorm = normalizeBusinessName(businessName);
+    const domainBase = domain.split(".")[0] ?? "";
+    if (nameNorm.includes(domainBase) || domainBase.length > 4 && nameMatchScore(domainBase, businessName) > 50) {
+      score += 15;
+    }
+  }
+
   return score;
-}
-
-function isValidBusinessEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
-
-function cleanEmail(raw: string): string {
-  return raw
-    .replace(/mailto:/gi, "")
-    .replace(/\u200b/g, "")
-    .replace(/[>,;)}\]'"]+$/g, "")
-    .trim()
-    .toLowerCase();
 }
 
 function isFacebookLoginWall(html: string): boolean {
   const lower = html.toLowerCase();
+  const shortPage = html.length < 15_000;
   return (
     lower.includes('id="loginform"') ||
     lower.includes("you must log in to continue") ||
     lower.includes("connectez-vous à facebook") ||
     lower.includes("log in to facebook") ||
-    (lower.includes('name="login"') && lower.includes("password"))
+    lower.includes("login_form") ||
+    (shortPage && lower.includes('name="login"') && lower.includes("password"))
   );
 }
 
 async function fetchFacebookHtml(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 14_000);
 
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
       },
     });
     clearTimeout(timeout);
 
     if (!res.ok) return null;
     const html = await res.text();
-    return html.length > 800_000 ? html.slice(0, 800_000) : html;
+    return html.length > 900_000 ? html.slice(0, 900_000) : html;
   } catch {
     return null;
   }
