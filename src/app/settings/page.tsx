@@ -152,7 +152,7 @@ export default function SettingsPage() {
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
-                Pitch / services (contexte pour Gemini)
+                Pitch / services (offre à respecter strictement)
               </label>
               <textarea
                 value={settings.pitchContext}
@@ -168,7 +168,7 @@ export default function SettingsPage() {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="block text-sm font-medium text-stone-700">
-                  Exemple de pitch (modèle pour Gemini)
+                  Exemple de pitch (modèle à reproduire)
                 </label>
                 {!settings.pitchExample && (
                   <button
@@ -195,8 +195,10 @@ export default function SettingsPage() {
                 className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
               />
               <p className="mt-1.5 text-xs text-stone-400">
-                Gemini s&apos;inspire de ce modèle pour le ton et la structure,
-                puis personnalise selon l&apos;audit de chaque prospect.
+                Gemini reproduit la structure, le ton et le call-to-action de ce
+                modèle, puis personnalise le nom du prospect et 1–2 points
+                d&apos;audit. Remplissez aussi le pitch ci-dessus pour verrouiller
+                l&apos;offre.
               </p>
             </div>
 

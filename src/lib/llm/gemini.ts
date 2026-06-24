@@ -50,7 +50,10 @@ function formatGeminiError(err: unknown): Error {
   return new Error(raw || "Erreur Gemini");
 }
 
-async function generateJson<T>(prompt: string): Promise<T> {
+async function generateJson<T>(
+  prompt: string,
+  options?: { temperature?: number }
+): Promise<T> {
   const ai = getClient();
   let lastError: unknown;
 
@@ -61,7 +64,7 @@ async function generateJson<T>(prompt: string): Promise<T> {
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          temperature: 0.5,
+          temperature: options?.temperature ?? 0.5,
         },
       });
 
@@ -180,58 +183,102 @@ export async function generateProspectionEmail(input: {
   emailType: "INITIAL" | "FOLLOWUP_J4" | "FOLLOWUP_J7" | "FOLLOWUP_J12";
   directorName?: string;
 }): Promise<GeneratedEmail> {
+  const prompt = buildProspectionPrompt(input);
+  return generateJson<GeneratedEmail>(prompt, { temperature: 0.25 });
+}
+
+function buildProspectionPrompt(input: {
+  prospectName: string;
+  activity?: string;
+  city?: string;
+  audit: AuditResult;
+  senderName: string;
+  companyName: string;
+  pitchContext: string;
+  pitchExample?: string;
+  emailType: "INITIAL" | "FOLLOWUP_J4" | "FOLLOWUP_J7" | "FOLLOWUP_J12";
+  directorName?: string;
+}): string {
   const followupContext = {
-    INITIAL: "Premier contact — présentez-vous brièvement et proposez de la valeur.",
-    FOLLOWUP_J4: "Relance J+4 — ton léger, rappel de votre proposition sans insister.",
-    FOLLOWUP_J7: "Relance J+7 — mentionnez un point concret de leur site ou absence de site.",
-    FOLLOWUP_J12: "Dernière relance J+12 — court, respectueux, porte ouverte.",
+    INITIAL:
+      "Premier contact — reprendre le modèle de pitch tel quel, en personnalisant uniquement le prospect.",
+    FOLLOWUP_J4:
+      "Relance J+4 — même ton et même offre que le pitch, message plus court (80-120 mots), rappel léger sans insister.",
+    FOLLOWUP_J7:
+      "Relance J+7 — même ton et même offre que le pitch, mentionner 1 point concret de l'audit (80-120 mots).",
+    FOLLOWUP_J12:
+      "Dernière relance J+12 — même ton que le pitch, très court (60-90 mots), respectueux, porte ouverte.",
   }[input.emailType];
 
-  const exampleBlock = input.pitchExample?.trim()
+  const pitchContext = input.pitchContext.trim();
+  const pitchExample = input.pitchExample?.trim() ?? "";
+
+  const pitchPriorityBlock = pitchContext
     ? `
-Exemple de pitch / email modèle (inspire-toi du ton, du rythme et de la structure — ne copie pas mot pour mot, personnalise pour ce prospect):
-"""
-${input.pitchExample.trim()}
-"""`
+=== PITCH / OFFRE (PRIORITÉ ABSOLUE — NE PAS DÉVIER) ===
+${pitchContext}
+
+Obligations liées au pitch :
+- Reprendre les services, la promesse et le positionnement EXACTS ci-dessus
+- Utiliser le même vocabulaire métier que dans le pitch (ne pas reformuler librement)
+- Ne PAS inventer d'autres prestations, tarifs, garanties ou arguments absents du pitch
+- Ne PAS remplacer le positionnement par un discours générique de "développeur freelance"`
     : "";
 
-  const prompt = `Tu es un développeur web full stack freelance qui rédige un email de prospection B2B en français.
+  const templateBlock = pitchExample
+    ? `
+=== MODÈLE D'EMAIL À RESPECTER (STRUCTURE ET TON OBLIGATOIRES) ===
+"""
+${pitchExample}
+"""
 
-Contexte expéditeur:
-- Nom: ${input.senderName}
-- Activité: ${input.companyName}
-- Pitch / services: ${input.pitchContext}
-${exampleBlock}
+Consignes strictes sur ce modèle :
+- CONSERVER la structure : même nombre de paragraphes, même type d'accroche, même progression
+- CONSERVER le ton, le registre de langue et le style de phrases du modèle
+- CONSERVER la formulation du call-to-action (RDV, durée, modalité) sauf adaptation minimale au prospect
+- Personnaliser UNIQUEMENT : nom/ville/activité du prospect + 1 à 2 phrases sur l'audit du site
+- Les phrases d'audit doivent s'intégrer naturellement là où le modèle parle du site ou de la présence en ligne
+- Ne PAS réécrire "à ta sauce" : le lecteur doit reconnaître le même email que le modèle`
+    : pitchContext
+      ? `
+=== MODÈLE D'EMAIL ===
+Aucun exemple fourni — rédige en t'appuyant STRICTEMENT sur le pitch ci-dessus (ton, offre, CTA).
+Structure recommandée : accroche courte → valeur du pitch → 1 point d'audit → CTA du pitch.`
+      : "";
 
-Prospect:
-- Entreprise: ${input.prospectName}
-- Secteur: ${input.activity ?? "non précisé"}
-- Ville: ${input.city ?? "non précisée"}
-- Dirigeant: ${input.directorName ?? "non connu"}
+  const wordLimit =
+    input.emailType === "INITIAL" ? "100-160 mots" : "60-120 mots";
 
-Audit site web (score ${input.audit.score}/100, technique ${input.audit.technicalScore ?? input.audit.score}/100):
-- Site: ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun"}
-- Analyse visuelle: ${
+  return `Tu rédiges un email de prospection B2B en français pour ${input.senderName} (${input.companyName}).
+
+${pitchPriorityBlock}
+${templateBlock}
+
+=== PROSPECT (personnalisation autorisée) ===
+- Entreprise : ${input.prospectName}
+- Secteur : ${input.activity ?? "non précisé"}
+- Ville : ${input.city ?? "non précisée"}
+- Dirigeant : ${input.directorName ?? "non connu"}
+
+=== AUDIT SITE (1 à 2 éléments max à intégrer) ===
+- Score pertinence : ${input.audit.score}/100
+- Site : ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun site web"}
+- Analyse visuelle : ${
     input.audit.visual?.analyzed
-      ? `${input.audit.visual.summary} (qualité ${input.audit.visual.designQuality}/10, besoin refonte ${input.audit.visual.needsWorkScore}/100)`
+      ? `${input.audit.visual.summary} (besoin refonte ${input.audit.visual.needsWorkScore}/100)`
       : "non disponible"
   }
-- Problèmes: ${input.audit.issues.join("; ") || "aucun majeur"}
-- Opportunités: ${input.audit.opportunities.join("; ")}
+- Problèmes : ${input.audit.issues.slice(0, 4).join("; ") || "aucun majeur"}
+- Opportunités : ${input.audit.opportunities.slice(0, 3).join("; ") || "aucune"}
 
-Type d'email: ${input.emailType}
-Consigne: ${followupContext}
+=== TYPE D'EMAIL ===
+${input.emailType} — ${followupContext}
 
-Règles:
-- Ton professionnel, humain, pas robotique
-- 120-180 mots max pour le corps du message (hors signature)
-- Pas de superlatifs excessifs
-- Proposer un échange de 15 min, pas de prix
-- Personnaliser avec 1-2 éléments concrets de l'audit
-- NE PAS inclure de signature (pas de cordialement, nom, téléphone, site) — elle sera ajoutée automatiquement
-- Répondre en JSON strict: {"subject":"...", "bodyText":"...", "bodyHtml":"<p>...</p>"}`;
-
-  return generateJson<GeneratedEmail>(prompt);
+=== RÈGLES FINALES ===
+- ${wordLimit} pour le corps (hors signature)
+- Ton humain et professionnel, fidèle au pitch — pas de formules génériques type "expert passionné", "solution sur mesure" si absentes du pitch
+- NE PAS inclure de signature (Cordialement, nom, téléphone, site) — ajoutée automatiquement après
+- Répondre en JSON strict : {"subject":"...", "bodyText":"...", "bodyHtml":"<p>...</p>"}`;
 }
 
 export async function classifyReply(input: {
