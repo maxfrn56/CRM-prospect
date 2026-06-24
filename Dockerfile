@@ -6,7 +6,7 @@ WORKDIR /app
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 RUN npx playwright install --with-deps chromium
 
