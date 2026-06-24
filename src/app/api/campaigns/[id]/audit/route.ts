@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auditAllInCampaign } from "@/lib/services/prospect-service";
 
+export const maxDuration = 300;
+
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, { params }: Params) {

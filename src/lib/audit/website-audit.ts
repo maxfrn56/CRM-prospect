@@ -5,6 +5,7 @@ import {
 import {
   captureWebsiteScreenshots,
   isVisualAuditEnabled,
+  screenshotCaptureIssueMessage,
 } from "@/lib/audit/screenshot-capture";
 import {
   analyzeWebsiteVisual,
@@ -221,10 +222,10 @@ export async function auditWebsite(
 
   let visual: VisualAuditResult | null = null;
   if (isVisualAuditEnabled() && finalUrl) {
-    const screenshots = await captureWebsiteScreenshots(finalUrl);
-    if (screenshots) {
+    const capture = await captureWebsiteScreenshots(finalUrl);
+    if (capture.ok) {
       visual = await analyzeWebsiteVisual({
-        screenshots,
+        screenshots: capture.data,
         businessName: options?.businessName,
         websiteUrl: finalUrl,
         activity: options?.activity,
@@ -240,7 +241,7 @@ export async function auditWebsite(
         issues.push("Analyse visuelle Gemini indisponible");
       }
     } else {
-      issues.push("Capture d'écran impossible (Playwright / site bloqué)");
+      issues.push(screenshotCaptureIssueMessage(capture.error));
     }
   }
 

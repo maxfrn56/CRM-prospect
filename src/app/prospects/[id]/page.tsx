@@ -104,6 +104,7 @@ export default function ProspectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmSaved, setCrmSaved] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -139,6 +140,7 @@ export default function ProspectDetailPage() {
   async function runAction(action: string) {
     setActionLoading(action);
     setActionError("");
+    setActionSuccess("");
     try {
       const res = await fetch(`/api/prospects/${id}`, {
         method: "POST",
@@ -149,6 +151,17 @@ export default function ProspectDetailPage() {
       if (!res.ok) {
         setActionError(data.error ?? "L'opération a échoué");
         return;
+      }
+      if (action === "audit" && data.autoOutreach) {
+        if (data.autoOutreach.sent) {
+          setActionSuccess("Audit terminé — email envoyé automatiquement.");
+        } else if (data.autoOutreach.eligible && data.autoOutreach.reason) {
+          setActionSuccess(
+            `Audit terminé — envoi auto non effectué : ${data.autoOutreach.reason}`
+          );
+        } else if (data.autoOutreach.reason) {
+          setActionSuccess(`Audit terminé — ${data.autoOutreach.reason}`);
+        }
       }
       load();
     } finally {
@@ -443,6 +456,11 @@ export default function ProspectDetailPage() {
               <p className="mt-2 text-xs text-stone-500">
                 Page Facebook détectée — l&apos;email peut y figurer dans la
                 section « À propos ».
+              </p>
+            )}
+            {actionSuccess && (
+              <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                {actionSuccess}
               </p>
             )}
             {actionError && (

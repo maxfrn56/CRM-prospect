@@ -21,6 +21,8 @@ interface Settings {
   website: string;
   phone: string;
   followupEnabled: boolean;
+  autoOutreachEnabled: boolean;
+  autoOutreachMinScore: number;
   mockupAutoEnabled: boolean;
   mockupRepoUrl: string;
   mockupRepoRef: string;
@@ -50,6 +52,8 @@ export default function SettingsPage() {
     website: "",
     phone: "",
     followupEnabled: true,
+    autoOutreachEnabled: false,
+    autoOutreachMinScore: 45,
     mockupAutoEnabled: false,
     mockupRepoUrl: "",
     mockupRepoRef: "main",
@@ -70,7 +74,14 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((data) => setSettings((prev) => ({ ...prev, ...data })))
+      .then((data) =>
+        setSettings((prev) => ({
+          ...prev,
+          ...data,
+          autoOutreachMinScore: data.autoOutreachMinScore ?? 45,
+          autoOutreachEnabled: data.autoOutreachEnabled ?? false,
+        }))
+      )
       .finally(() => setLoading(false));
 
     fetch("/api/settings/resend-health")
@@ -233,6 +244,55 @@ export default function SettingsPage() {
               />
               Activer les relances automatiques (J4, J7, J12)
             </label>
+
+            <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-stone-800">
+                <input
+                  type="checkbox"
+                  checked={settings.autoOutreachEnabled}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      autoOutreachEnabled: e.target.checked,
+                    })
+                  }
+                  className="rounded border-stone-300"
+                />
+                Envoi automatique après audit
+              </label>
+              <p className="mt-2 text-xs text-stone-500">
+                Si le score de pertinence atteint le seuil et qu&apos;un email a
+                été trouvé, génère et envoie le premier message sans action
+                manuelle.
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <label
+                  htmlFor="autoOutreachMinScore"
+                  className="text-xs text-stone-600"
+                >
+                  Score minimum :
+                </label>
+                <input
+                  id="autoOutreachMinScore"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={settings.autoOutreachMinScore}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      autoOutreachMinScore: Math.min(
+                        100,
+                        Math.max(0, parseInt(e.target.value, 10) || 0)
+                      ),
+                    })
+                  }
+                  className="w-20 rounded-md border border-stone-300 px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-stone-500">/ 100</span>
+              </div>
+            </div>
+
             <Button type="submit">
               {saved ? (
                 <>

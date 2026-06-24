@@ -13,6 +13,8 @@ import {
   syncMockupJob,
 } from "@/lib/mockup/mockup-service";
 
+export const maxDuration = 120;
+
 type Params = { params: Promise<{ id: string }> };
 
 const CONTACTED_STATUSES: ProspectStatus[] = [

@@ -10,6 +10,8 @@ const ALLOWED_FIELDS = [
   "website",
   "phone",
   "followupEnabled",
+  "autoOutreachEnabled",
+  "autoOutreachMinScore",
   "mockupAutoEnabled",
   "mockupRepoUrl",
   "mockupRepoRef",

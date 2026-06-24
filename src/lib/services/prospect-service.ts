@@ -37,7 +37,18 @@ export interface FollowupResult {
   items: FollowupItem[];
 }
 
-export async function auditProspect(prospectId: string) {
+export interface AuditProspectResult {
+  audit: AuditResult;
+  emailFound: boolean;
+  email: string | null;
+  autoOutreach: {
+    eligible: boolean;
+    sent: boolean;
+    reason?: string;
+  };
+}
+
+export async function auditProspect(prospectId: string): Promise<AuditProspectResult> {
   const prospect = await prisma.prospect.findUniqueOrThrow({
     where: { id: prospectId },
     include: { campaign: true },
@@ -84,7 +95,95 @@ export async function auditProspect(prospectId: string) {
     },
   });
 
-  return { audit, emailFound: Boolean(email && !prospect.email) };
+  const autoOutreach = await tryAutoOutreachAfterAudit(
+    prospectId,
+    audit.score,
+    email
+  );
+
+  return {
+    audit,
+    emailFound: Boolean(email && !prospect.email),
+    email,
+    autoOutreach,
+  };
+}
+
+async function tryAutoOutreachAfterAudit(
+  prospectId: string,
+  auditScore: number,
+  email: string | null
+): Promise<AuditProspectResult["autoOutreach"]> {
+  const settings = await getSettings();
+
+  if (!settings.autoOutreachEnabled) {
+    return {
+      eligible: false,
+      sent: false,
+      reason: "Envoi automatique désactivé dans Paramètres",
+    };
+  }
+
+  if (auditScore < settings.autoOutreachMinScore) {
+    return {
+      eligible: false,
+      sent: false,
+      reason: `Score ${auditScore}/100 sous le seuil (${settings.autoOutreachMinScore})`,
+    };
+  }
+
+  if (!email) {
+    return {
+      eligible: true,
+      sent: false,
+      reason: "Score OK mais aucun email trouvé",
+    };
+  }
+
+  const prospect = await prisma.prospect.findUnique({
+    where: { id: prospectId },
+    select: { status: true },
+  });
+
+  if (
+    prospect &&
+    ["CONTACTED", "REPLIED", "HOT", "CONVERTED", "ARCHIVED"].includes(
+      prospect.status
+    )
+  ) {
+    return {
+      eligible: false,
+      sent: false,
+      reason: `Prospect déjà « ${prospect.status} »`,
+    };
+  }
+
+  const existingSent = await prisma.email.findFirst({
+    where: {
+      prospectId,
+      type: "INITIAL",
+      status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+    },
+  });
+
+  if (existingSent) {
+    return {
+      eligible: false,
+      sent: false,
+      reason: "Email initial déjà envoyé",
+    };
+  }
+
+  try {
+    const draft = await generateAndSaveEmail(prospectId, "INITIAL");
+    await sendProspectEmail(draft.id);
+    return { eligible: true, sent: true };
+  } catch (err) {
+    const reason =
+      err instanceof Error ? err.message : "Erreur lors de l'envoi automatique";
+    console.error("[auto-outreach]", prospectId, reason);
+    return { eligible: true, sent: false, reason };
+  }
 }
 
 export async function auditAllInCampaign(campaignId: string) {
@@ -103,20 +202,37 @@ export async function auditAllInCampaign(campaignId: string) {
   const prospects = await prisma.prospect.findMany({
     where: {
       campaignId,
-      email: null,
       status: { in: ["NEW", "AUDITED"] },
+      NOT: {
+        emails: {
+          some: {
+            type: "INITIAL",
+            status: { in: ["SENT", "DELIVERED", "OPENED", "REPLIED"] },
+          },
+        },
+      },
     },
   });
 
-  const results: { id: string; score: number; emailFound?: boolean }[] = [];
+  const results: {
+    id: string;
+    score: number;
+    emailFound?: boolean;
+    autoEmailSent?: boolean;
+    skipReason?: string;
+  }[] = [];
   for (const p of prospects) {
     const result = await auditProspect(p.id);
     results.push({
       id: p.id,
       score: result.audit.score,
       emailFound: result.emailFound,
+      autoEmailSent: result.autoOutreach.sent,
+      skipReason: result.autoOutreach.sent
+        ? undefined
+        : result.autoOutreach.reason,
     });
-    await sleep(500);
+    await sleep(800);
   }
   return results;
 }

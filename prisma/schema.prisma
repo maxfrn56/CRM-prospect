@@ -181,6 +181,10 @@ model AppSettings {
   phone           String   @default("")
   followupEnabled Boolean  @default(true)
 
+  // Envoi automatique après audit (score + email requis)
+  autoOutreachEnabled  Boolean @default(false)
+  autoOutreachMinScore Int     @default(45)
+
   // Maquettes Cursor (agent cloud)
   mockupAutoEnabled   Boolean @default(false)
   mockupRepoUrl       String  @default("")
