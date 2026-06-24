@@ -26,6 +26,21 @@ export function scoreColor(score: number): string {
   return "text-stone-600 bg-stone-50 border-stone-200";
 }
 
+export function visualRatingColor(rating: string): string {
+  switch (rating) {
+    case "poor":
+    case "dated":
+      return "text-emerald-700 bg-emerald-50 border-emerald-200";
+    case "average":
+      return "text-amber-700 bg-amber-50 border-amber-200";
+    case "good":
+    case "excellent":
+      return "text-stone-600 bg-stone-100 border-stone-200";
+    default:
+      return "text-stone-500 bg-stone-50 border-stone-200";
+  }
+}
+
 export function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     NEW: "Nouveau",

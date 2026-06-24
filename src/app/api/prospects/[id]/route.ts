@@ -64,11 +64,14 @@ export async function POST(req: NextRequest, { params }: Params) {
           city: prospect.city ?? prospect.campaign?.city,
           postalCode: prospect.postalCode,
           sector: prospect.campaign?.sector,
+          auditDetails: prospect.auditDetails,
         });
         if (found.email) {
           const source = found.foundOn?.includes("barreau")
             ? "barreau"
-            : "email-finder";
+            : found.foundOn?.includes("facebook")
+              ? "facebook"
+              : "email-finder";
           await prisma.prospect.update({
             where: { id },
             data: {
@@ -76,6 +79,46 @@ export async function POST(req: NextRequest, { params }: Params) {
               enrichmentSource: prospect.enrichmentSource
                 ? `${prospect.enrichmentSource}+${source}`
                 : source,
+            },
+          });
+        }
+        return NextResponse.json(found);
+      }
+      case "find-facebook": {
+        const prospect = await prisma.prospect.findUniqueOrThrow({
+          where: { id },
+        });
+        let facebookUrl: string | null = null;
+        if (prospect.auditDetails) {
+          try {
+            facebookUrl =
+              (JSON.parse(prospect.auditDetails) as { facebookUrl?: string })
+                .facebookUrl ?? null;
+          } catch {
+            facebookUrl = null;
+          }
+        }
+        if (!facebookUrl) {
+          return NextResponse.json(
+            {
+              error:
+                "Aucune page Facebook détectée — lancez d'abord un audit du site.",
+            },
+            { status: 400 }
+          );
+        }
+        const { findEmailOnFacebook } = await import(
+          "@/lib/enrichment/facebook-email-finder"
+        );
+        const found = await findEmailOnFacebook(facebookUrl);
+        if (found.email) {
+          await prisma.prospect.update({
+            where: { id },
+            data: {
+              email: found.email,
+              enrichmentSource: prospect.enrichmentSource
+                ? `${prospect.enrichmentSource}+facebook`
+                : "facebook",
             },
           });
         }

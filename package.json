@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "sh scripts/prisma-generate.sh",
+    "postinstall": "sh scripts/prisma-generate.sh && npx playwright install chromium || true",
     "build": "next build",
     "start": "sh scripts/railway-start.sh",
     "lint": "next lint",
@@ -22,6 +22,7 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^0.511.0",
     "next": "^15.3.3",
+    "playwright": "^1.61.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "resend": "^4.5.1",

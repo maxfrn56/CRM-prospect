@@ -2,7 +2,18 @@ import { enrichFromSirene } from "./sirene";
 import { enrichFromPappers } from "./pappers";
 import { findEmailOnWebsite } from "@/lib/email-finder/website-email-finder";
 import { findEmailViaBarreau, isLawyerSector } from "./barreau-email-finder";
+import { findEmailOnFacebook } from "./facebook-email-finder";
 import type { BusinessResult } from "@/lib/google-places/client";
+
+function parseFacebookFromAudit(auditDetails: string | null | undefined): string | null {
+  if (!auditDetails) return null;
+  try {
+    const audit = JSON.parse(auditDetails) as { facebookUrl?: string | null };
+    return audit.facebookUrl ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface EnrichedBusiness extends BusinessResult {
   siren?: string;
@@ -91,10 +102,27 @@ export async function findEmailForProspect(
     city?: string | null;
     postalCode?: string | null;
     sector?: string | null;
+    facebookUrl?: string | null;
+    auditDetails?: string | null;
   }
 ) {
   const onWebsite = await findEmailOnWebsite(website);
   if (onWebsite.email) return onWebsite;
+
+  const facebookUrl =
+    options?.facebookUrl ?? parseFacebookFromAudit(options?.auditDetails);
+
+  if (facebookUrl) {
+    const fb = await findEmailOnFacebook(facebookUrl);
+    if (fb.email) {
+      return {
+        email: fb.email,
+        candidates: fb.candidates,
+        foundOn: fb.foundOn ?? `facebook:${facebookUrl}`,
+        confidence: fb.confidence,
+      };
+    }
+  }
 
   if (options?.name && isLawyerSector(options.sector)) {
     const barreau = await findEmailViaBarreau({
@@ -119,4 +147,4 @@ export async function findEmailForProspect(
   return onWebsite;
 }
 
-export { isLawyerSector, findEmailViaBarreau };
+export { isLawyerSector, findEmailViaBarreau, findEmailOnFacebook };

@@ -1,7 +1,22 @@
 import * as cheerio from "cheerio";
+import {
+  extractFacebookFromHtml,
+} from "@/lib/enrichment/facebook-email-finder";
+import {
+  captureWebsiteScreenshots,
+  isVisualAuditEnabled,
+} from "@/lib/audit/screenshot-capture";
+import {
+  analyzeWebsiteVisual,
+  type VisualAuditResult,
+} from "@/lib/llm/gemini-visual-audit";
+
+export type { VisualAuditResult, VisualDesignRating } from "@/lib/llm/gemini-visual-audit";
+export { visualRatingLabel } from "@/lib/llm/gemini-visual-audit";
 
 export interface AuditResult {
   score: number;
+  technicalScore: number;
   hasWebsite: boolean;
   websiteUrl: string | null;
   https: boolean;
@@ -10,6 +25,8 @@ export interface AuditResult {
   outdatedDesign: boolean;
   missingMetaDescription: boolean;
   instagramUrl: string | null;
+  facebookUrl: string | null;
+  visual: VisualAuditResult | null;
   issues: string[];
   opportunities: string[];
   summary: string;
@@ -56,7 +73,8 @@ const EXTRA_INSTAGRAM_PATHS = [
 ];
 
 export async function auditWebsite(
-  rawUrl: string | null | undefined
+  rawUrl: string | null | undefined,
+  options?: { businessName?: string; activity?: string }
 ): Promise<AuditResult> {
   const issues: string[] = [];
   const opportunities: string[] = [];
@@ -64,6 +82,7 @@ export async function auditWebsite(
   if (!rawUrl || rawUrl.trim() === "") {
     return {
       score: 95,
+      technicalScore: 95,
       hasWebsite: false,
       websiteUrl: null,
       https: false,
@@ -72,6 +91,8 @@ export async function auditWebsite(
       outdatedDesign: false,
       missingMetaDescription: true,
       instagramUrl: null,
+      facebookUrl: null,
+      visual: null,
       issues: ["Aucun site web référencé"],
       opportunities: [
         "Création de site vitrine professionnel",
@@ -120,8 +141,10 @@ export async function auditWebsite(
     issues.push("Site inaccessible ou timeout");
     opportunities.push("Site potentiellement down — opportunité de refonte");
     const instagramUrl = await findInstagramOnSite(url);
+    const facebookUrl = await findFacebookOnSite(url);
     return buildResult({
       score: 80,
+      technicalScore: 80,
       hasWebsite: true,
       websiteUrl: url,
       https,
@@ -130,12 +153,15 @@ export async function auditWebsite(
       outdatedDesign: false,
       missingMetaDescription: true,
       instagramUrl,
+      facebookUrl,
+      visual: null,
       issues,
       opportunities,
     });
   }
 
   const instagramUrl = await findInstagramOnSite(url, html);
+  const facebookUrl = await findFacebookOnSite(url, html);
 
   const $ = cheerio.load(html);
   const viewport = $('meta[name="viewport"]').attr("content");
@@ -191,21 +217,44 @@ export async function auditWebsite(
   if (missingMetaDescription) score += 10;
   if (loadTimeMs !== null && loadTimeMs > 3000) score += 10;
   if (issues.some((i) => i.includes("inaccessible"))) score += 15;
-  score = Math.min(100, score);
+  const technicalScore = Math.min(100, score);
+
+  let visual: VisualAuditResult | null = null;
+  if (isVisualAuditEnabled() && finalUrl) {
+    const screenshots = await captureWebsiteScreenshots(finalUrl);
+    if (screenshots) {
+      visual = await analyzeWebsiteVisual({
+        screenshots,
+        businessName: options?.businessName,
+        websiteUrl: finalUrl,
+        activity: options?.activity,
+      });
+      if (visual.analyzed) {
+        if (visual.issues.length > 0) {
+          issues.push(...visual.issues.slice(0, 3).map((i) => `[Visuel] ${i}`));
+        }
+        if (visual.opportunities.length > 0) {
+          opportunities.unshift(...visual.opportunities.slice(0, 2));
+        }
+      } else if (visual.skippedReason) {
+        issues.push("Analyse visuelle Gemini indisponible");
+      }
+    } else {
+      issues.push("Capture d'écran impossible (Playwright / site bloqué)");
+    }
+  }
+
+  score = combineAuditScores(technicalScore, visual);
 
   if (issues.length === 0) {
     opportunities.push("Site correct — proposer audit approfondi ou maintenance");
   }
 
-  const summary =
-    score >= 70
-      ? `Fort potentiel (${score}/100) : ${issues.slice(0, 2).join(", ") || "plusieurs axes d'amélioration"}.`
-      : score >= 40
-        ? `Potentiel modéré (${score}/100) : quelques optimisations possibles.`
-        : `Faible priorité (${score}/100) : site déjà en bon état.`;
+  const summary = buildAuditSummary(score, technicalScore, visual, issues);
 
   return buildResult({
     score,
+    technicalScore,
     hasWebsite: true,
     websiteUrl: finalUrl,
     https,
@@ -214,10 +263,45 @@ export async function auditWebsite(
     outdatedDesign,
     missingMetaDescription,
     instagramUrl,
+    facebookUrl,
+    visual,
     issues,
     opportunities,
     summary,
   });
+}
+
+function combineAuditScores(
+  technicalScore: number,
+  visual: VisualAuditResult | null
+): number {
+  if (visual?.analyzed) {
+    return Math.min(
+      100,
+      Math.round(technicalScore * 0.3 + visual.needsWorkScore * 0.7)
+    );
+  }
+  return technicalScore;
+}
+
+function buildAuditSummary(
+  score: number,
+  technicalScore: number,
+  visual: VisualAuditResult | null,
+  issues: string[]
+): string {
+  const visualPart =
+    visual?.analyzed
+      ? ` Analyse visuelle : ${visual.summary}`
+      : "";
+
+  if (score >= 70) {
+    return `Fort potentiel (${score}/100) — ${issues.slice(0, 2).join(", ") || "refonte ou création recommandée"}.${visualPart}`;
+  }
+  if (score >= 40) {
+    return `Potentiel modéré (${score}/100) — améliorations possibles (technique ${technicalScore}/100).${visualPart}`;
+  }
+  return `Faible priorité (${score}/100) — site déjà solide, peu de marge commerciale.${visualPart}`;
 }
 
 function normalizeInstagramUrl(href: string): string | null {
@@ -287,6 +371,41 @@ async function findInstagramOnSite(
     if (!html) continue;
     const instagram = extractInstagramFromHtml(html);
     if (instagram) return instagram;
+  }
+
+  return null;
+}
+
+async function findFacebookOnSite(
+  rawUrl: string,
+  homepageHtml?: string
+): Promise<string | null> {
+  let baseUrl = rawUrl.trim();
+  if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
+
+  try {
+    baseUrl = new URL(baseUrl).origin;
+  } catch {
+    return null;
+  }
+
+  if (homepageHtml) {
+    const fromHome = extractFacebookFromHtml(homepageHtml);
+    if (fromHome) return fromHome;
+  }
+
+  const urls = new Set<string>();
+  if (!homepageHtml) urls.add(baseUrl);
+  for (const path of EXTRA_INSTAGRAM_PATHS) {
+    urls.add(new URL(path, baseUrl).toString().split("#")[0]);
+  }
+
+  for (const pageUrl of urls) {
+    const html =
+      homepageHtml && pageUrl === baseUrl ? homepageHtml : await fetchPageHtml(pageUrl);
+    if (!html) continue;
+    const facebook = extractFacebookFromHtml(html);
+    if (facebook) return facebook;
   }
 
   return null;

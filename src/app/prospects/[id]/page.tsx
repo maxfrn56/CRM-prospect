@@ -9,11 +9,12 @@ import {
   statusLabel,
   formatDate,
   contactChannelLabel,
+  visualRatingColor,
   PROSPECT_STATUSES,
   CONTACT_CHANNELS,
   statusBadgeClass,
 } from "@/lib/utils";
-import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2, Instagram } from "lucide-react";
+import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2, Instagram, Facebook } from "lucide-react";
 import {
   MockupSection,
   type MockupJobSummary,
@@ -25,6 +26,7 @@ import {
 
 interface AuditDetails {
   score: number;
+  technicalScore?: number;
   hasWebsite: boolean;
   websiteUrl: string | null;
   https: boolean;
@@ -32,6 +34,19 @@ interface AuditDetails {
   loadTimeMs: number | null;
   outdatedDesign: boolean;
   instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  visual?: {
+    analyzed: boolean;
+    designQuality: number;
+    needsWorkScore: number;
+    rating: string;
+    summary: string;
+    issues: string[];
+    opportunities: string[];
+    screenshotDesktop?: string;
+    screenshotMobile?: string;
+    skippedReason?: string;
+  } | null;
   issues: string[];
   opportunities: string[];
   summary: string;
@@ -386,7 +401,7 @@ export default function ProspectDetailPage() {
                   )}
                 </Button>
               )}
-              {!prospect.email && isLawyerCampaign && (
+              {!prospect.email && (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -396,15 +411,38 @@ export default function ProspectDetailPage() {
                   {actionLoading === "find-email" ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    "Chercher via barreau"
+                    "Chercher email"
+                  )}
+                </Button>
+              )}
+              {!prospect.email && audit?.facebookUrl && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => runAction("find-facebook")}
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "find-facebook" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Facebook className="mr-1 h-3 w-3" />
+                      Via Facebook
+                    </>
                   )}
                 </Button>
               )}
             </div>
             {isLawyerCampaign && !prospect.email && (
               <p className="mt-2 text-xs text-stone-500">
-                Campagne avocats : recherche dans l&apos;annuaire CNB puis sur
-                le site du barreau local.
+                Campagne avocats : recherche site web, page Facebook, puis
+                annuaire CNB / barreau local.
+              </p>
+            )}
+            {!isLawyerCampaign && !prospect.email && audit?.facebookUrl && (
+              <p className="mt-2 text-xs text-stone-500">
+                Page Facebook détectée — l&apos;email peut y figurer dans la
+                section « À propos ».
               </p>
             )}
             {actionError && (
@@ -535,17 +573,100 @@ export default function ProspectDetailPage() {
                     Instagram
                   </a>
                 )}
+                {audit.facebookUrl && (
+                  <a
+                    href={audit.facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Voir la page Facebook"
+                    className="inline-flex items-center gap-2 rounded-md bg-[#1877F2] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    <Facebook className="h-4 w-4" />
+                    Facebook
+                  </a>
+                )}
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <CheckItem label="Site web" ok={audit.hasWebsite} />
                 <CheckItem label="HTTPS" ok={audit.https} />
                 <CheckItem label="Responsive" ok={audit.responsive} />
                 <CheckItem
-                  label="Design daté"
+                  label="Design daté (HTML)"
                   ok={!audit.outdatedDesign}
                   invert
                 />
               </div>
+
+              {audit.visual?.analyzed && (
+                <div className="mt-5 rounded-lg border border-stone-200 bg-stone-50/80 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      Analyse visuelle Gemini
+                    </p>
+                    <Badge className={visualRatingColor(audit.visual.rating)}>
+                      {audit.visual.rating === "excellent"
+                        ? "Excellent"
+                        : audit.visual.rating === "good"
+                          ? "Correct"
+                          : audit.visual.rating === "average"
+                            ? "Moyen"
+                            : audit.visual.rating === "dated"
+                              ? "Daté"
+                              : audit.visual.rating === "poor"
+                                ? "Faible"
+                                : "Inconnu"}
+                    </Badge>
+                    <span className="text-xs text-stone-500">
+                      Qualité {audit.visual.designQuality}/10 · Besoin refonte{" "}
+                      {audit.visual.needsWorkScore}/100
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-stone-700">
+                    {audit.visual.summary}
+                  </p>
+                  {(audit.visual.screenshotDesktop ||
+                    audit.visual.screenshotMobile) && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {audit.visual.screenshotDesktop && (
+                        <figure>
+                          <figcaption className="mb-1 text-xs text-stone-500">
+                            Desktop
+                          </figcaption>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={audit.visual.screenshotDesktop}
+                            alt="Capture desktop du site"
+                            className="w-full rounded-md border border-stone-200 shadow-sm"
+                          />
+                        </figure>
+                      )}
+                      {audit.visual.screenshotMobile && (
+                        <figure>
+                          <figcaption className="mb-1 text-xs text-stone-500">
+                            Mobile
+                          </figcaption>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={audit.visual.screenshotMobile}
+                            alt="Capture mobile du site"
+                            className="mx-auto max-w-[220px] rounded-md border border-stone-200 shadow-sm"
+                          />
+                        </figure>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {audit.technicalScore !== undefined && audit.visual?.analyzed && (
+                <p className="mt-3 text-xs text-stone-500">
+                  Score combiné {audit.score}/100 (technique{" "}
+                  {audit.technicalScore}/100 + visuel{" "}
+                  {audit.visual.needsWorkScore}/100)
+                </p>
+              )}
+
+              <p className="mt-3 text-sm text-stone-600">{audit.summary}</p>
               {audit.issues.length > 0 && (
                 <div className="mt-4">
                   <p className="text-xs font-medium text-stone-500">

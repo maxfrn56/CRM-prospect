@@ -209,8 +209,13 @@ Prospect:
 - Ville: ${input.city ?? "non précisée"}
 - Dirigeant: ${input.directorName ?? "non connu"}
 
-Audit site web (score ${input.audit.score}/100):
+Audit site web (score ${input.audit.score}/100, technique ${input.audit.technicalScore ?? input.audit.score}/100):
 - Site: ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun"}
+- Analyse visuelle: ${
+    input.audit.visual?.analyzed
+      ? `${input.audit.visual.summary} (qualité ${input.audit.visual.designQuality}/10, besoin refonte ${input.audit.visual.needsWorkScore}/100)`
+      : "non disponible"
+  }
 - Problèmes: ${input.audit.issues.join("; ") || "aucun majeur"}
 - Opportunités: ${input.audit.opportunities.join("; ")}
 

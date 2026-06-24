@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Globe,
   Instagram,
+  Facebook,
   Loader2,
   Mail,
 } from "lucide-react";
@@ -42,9 +43,16 @@ interface AuditDetails {
   issues: string[];
   opportunities: string[];
   instagramUrl?: string | null;
+  facebookUrl?: string | null;
   https: boolean;
   responsive: boolean;
   hasWebsite: boolean;
+  visual?: {
+    analyzed: boolean;
+    rating: string;
+    summary: string;
+    needsWorkScore: number;
+  } | null;
 }
 
 interface ProspectDetail extends ProspectSummary {
@@ -191,6 +199,12 @@ export function ProspectTableRow({
                   {audit ? (
                     <div className="mt-2 space-y-2">
                       <p className="text-sm text-stone-700">{audit.summary}</p>
+                      {audit.visual?.analyzed && (
+                        <p className="text-xs text-stone-600">
+                          Visuel : {audit.visual.summary} (
+                          {audit.visual.needsWorkScore}/100 refonte)
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-2">
                         <CheckPill label="Site" ok={audit.hasWebsite} />
                         <CheckPill label="HTTPS" ok={audit.https} />
@@ -212,6 +226,17 @@ export function ProspectTableRow({
                         >
                           <Instagram className="h-3.5 w-3.5" />
                           Instagram
+                        </a>
+                      )}
+                      {audit.facebookUrl && (
+                        <a
+                          href={audit.facebookUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-[#1877F2] hover:underline"
+                        >
+                          <Facebook className="h-3.5 w-3.5" />
+                          Facebook
                         </a>
                       )}
                     </div>
@@ -254,20 +279,39 @@ export function ProspectTableRow({
                           </>
                         )}
                       </Button>
-                    ) : isLawyerCampaign ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => runAction("find-email")}
-                        disabled={!!actionLoading}
-                      >
-                        {actionLoading === "find-email" ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          "Chercher via barreau"
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => runAction("find-email")}
+                          disabled={!!actionLoading}
+                        >
+                          {actionLoading === "find-email" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            "Chercher email"
+                          )}
+                        </Button>
+                        {audit?.facebookUrl && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => runAction("find-facebook")}
+                            disabled={!!actionLoading}
+                          >
+                            {actionLoading === "find-facebook" ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Facebook className="mr-1 h-3 w-3" />
+                                Via Facebook
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
-                    ) : null}
+                      </>
+                    )}
                   </div>
 
                   <div className="mt-3 space-y-1 text-xs text-stone-600">
@@ -277,6 +321,9 @@ export function ProspectTableRow({
                         {email}
                         {detail?.enrichmentSource?.includes("barreau") && (
                           <span className="text-violet-600">· barreau</span>
+                        )}
+                        {detail?.enrichmentSource?.includes("facebook") && (
+                          <span className="text-[#1877F2]">· facebook</span>
                         )}
                       </p>
                     )}

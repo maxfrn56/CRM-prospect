@@ -46,27 +46,31 @@ export async function auditProspect(prospectId: string) {
   let email = prospect.email;
   let enrichmentSource = prospect.enrichmentSource;
 
+  const audit = await auditWebsite(prospect.website, {
+    businessName: prospect.name,
+    activity: prospect.activity ?? prospect.campaign?.sector ?? undefined,
+  });
+
   if (!email) {
     const found = await findEmailForProspect(prospect.website, {
       name: prospect.name,
       city: prospect.city ?? prospect.campaign?.city,
       postalCode: prospect.postalCode,
       sector: prospect.campaign?.sector,
+      facebookUrl: audit.facebookUrl,
     });
     if (found.email) {
       email = found.email;
-      const source =
-        found.foundOn?.includes("barreau") ||
-        found.foundOn?.includes("annuaire-barreau")
-          ? "barreau"
+      const source = found.foundOn?.includes("barreau")
+        ? "barreau"
+        : found.foundOn?.includes("facebook")
+          ? "facebook"
           : "email-finder";
       enrichmentSource = enrichmentSource
         ? `${enrichmentSource}+${source}`
         : source;
     }
   }
-
-  const audit = await auditWebsite(prospect.website);
 
   await prisma.prospect.update({
     where: { id: prospectId },
@@ -132,7 +136,10 @@ export async function generateAndSaveEmail(
   const settings = await getSettings();
   const audit: AuditResult = prospect.auditDetails
     ? JSON.parse(prospect.auditDetails)
-    : await auditWebsite(prospect.website);
+    : await auditWebsite(prospect.website, {
+        businessName: prospect.name,
+        activity: prospect.activity ?? undefined,
+      });
 
   const generated = appendSignatureToEmail(
     await generateProspectionEmail({
