@@ -130,24 +130,7 @@ export function commercialSegmentLabel(id: string | null | undefined): string {
   return getCommercialSegment(id)?.label ?? id ?? "—";
 }
 
-export function buildCommercialSearchQuery(
-  segment: CommercialSegment,
-  niche: string,
-  city: string
-): string {
-  const n = niche.trim();
-  const c = city.trim();
-  switch (segment) {
-    case "INDEPENDENT":
-      return `commercial indépendant ${n} ${c}`;
-    case "SDR_STARTUP":
-      return `startup ${n} ${c}`;
-    case "SALES_CABINET":
-      return `cabinet commercial externalisé ${n} ${c}`;
-    default:
-      return `${n} ${c}`;
-  }
-}
+export { buildCommercialSearchQueries, buildCommercialSearchQuery } from "@/lib/commercial/search-queries";
 
 export function getCommercialPitch(
   segment: CommercialSegment,

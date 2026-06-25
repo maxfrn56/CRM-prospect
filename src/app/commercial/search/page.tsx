@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { PageHeader, Card, Button } from "@/components/ui";
 import {
   COMMERCIAL_SEGMENTS,
-  buildCommercialSearchQuery,
+  buildCommercialSearchQueries,
   type CommercialSegment,
 } from "@/lib/commercial/segments";
+import { isCommercialVerticalNiche } from "@/lib/commercial/prospect-filter";
 import { Loader2 } from "lucide-react";
 
 async function parseApiResponse(res: Response) {
@@ -39,10 +40,14 @@ export default function CommercialSearchPage() {
   });
 
   const segmentConfig = COMMERCIAL_SEGMENTS[form.segment];
-  const previewQuery =
-    form.niche.trim() && form.city.trim()
-      ? buildCommercialSearchQuery(form.segment, form.niche, form.city)
-      : null;
+  const previewQueries =
+    form.city.trim()
+      ? buildCommercialSearchQueries(
+          form.segment,
+          form.niche.trim(),
+          form.city
+        )
+      : [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -153,7 +158,9 @@ export default function CommercialSearchPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-stone-500">
-                Le pitch email sera adapté à ce domaine ({segmentConfig.label}).
+                {form.niche.trim() && isCommercialVerticalNiche(form.niche)
+                  ? "Vertical commercial (immo, assurance…) : recherche + pitch adaptés."
+                  : "Niche métier (sport, IT…) : recherche des commerciaurs qui vendent dans ce secteur, pas les clubs ou écoles. Résultats filtrés automatiquement."}
               </p>
             </div>
 
@@ -165,12 +172,21 @@ export default function CommercialSearchPage() {
               required
             />
 
-            {previewQuery && (
+            {previewQueries.length > 0 && (
               <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
-                <span className="font-medium text-stone-700">
-                  Requête Google Places :
-                </span>{" "}
-                « {previewQuery} »
+                <p className="font-medium text-stone-700">
+                  Requêtes Google Places ({previewQueries.length}) + filtre
+                  anti-bruit
+                </p>
+                <ul className="mt-2 list-inside list-disc space-y-0.5">
+                  {previewQueries.map((q) => (
+                    <li key={q}>{q}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-stone-500">
+                  Les clubs, écoles, coachs et coworkings sont exclus
+                  automatiquement.
+                </p>
               </div>
             )}
 

@@ -18,6 +18,8 @@ export interface SearchParams {
   sector: string;
   city: string;
   maxResults?: number;
+  /** Requête complète — ignore la concaténation sector + city */
+  textQuery?: string;
 }
 
 const FIELD_MASK = [
@@ -94,7 +96,7 @@ export async function searchBusinesses(
   params: SearchParams
 ): Promise<BusinessResult[]> {
   const maxResults = params.maxResults ?? 60;
-  const textQuery = `${params.sector} ${params.city}`;
+  const textQuery = params.textQuery ?? `${params.sector} ${params.city}`.trim();
   const all: BusinessResult[] = [];
   const seen = new Set<string>();
   let pageToken: string | undefined;

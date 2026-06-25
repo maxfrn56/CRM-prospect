@@ -5,10 +5,11 @@ import {
   type CommercialAuditResult,
 } from "@/lib/commercial/commercial-audit";
 import {
-  buildCommercialSearchQuery,
+  buildCommercialSearchQueries,
   getCommercialPitch,
   type CommercialSegment,
 } from "@/lib/commercial/segments";
+import { filterCommercialProspect } from "@/lib/commercial/prospect-filter";
 import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
 import type { CampaignType } from "@prisma/client";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
@@ -685,21 +686,59 @@ export async function importSearchResults(input: {
   niche?: string | null;
 }) {
   const maxResults = (input.maxPages ?? 3) * 20;
-  let searchQuery = input.sector;
+  const isCommercial =
+    input.campaignType === "SALES_TOOL" && input.commercialSegment;
 
-  if (input.campaignType === "SALES_TOOL" && input.commercialSegment) {
-    searchQuery = buildCommercialSearchQuery(
-      input.commercialSegment,
-      input.niche ?? input.sector,
-      input.city
-    );
+  let businesses;
+
+  if (isCommercial) {
+    const segment = input.commercialSegment as CommercialSegment;
+    const niche = input.niche ?? input.sector;
+    const queries = buildCommercialSearchQueries(segment, niche, input.city);
+    const perQuery = Math.ceil(maxResults / queries.length) + 5;
+    const seen = new Set<string>();
+    const raw: Awaited<ReturnType<typeof searchBusinesses>> = [];
+
+    for (const query of queries) {
+      const batch = await searchBusinesses({
+        sector: query,
+        city: input.city,
+        textQuery: query,
+        maxResults: perQuery,
+      });
+      for (const biz of batch) {
+        if (!seen.has(biz.googlePlaceId)) {
+          seen.add(biz.googlePlaceId);
+          raw.push(biz);
+        }
+      }
+      await sleep(300);
+    }
+
+    const rejected: string[] = [];
+    businesses = raw.filter((biz) => {
+      const { accepted, reason } = filterCommercialProspect(biz, segment, niche);
+      if (!accepted) {
+        rejected.push(`${biz.name}: ${reason}`);
+      }
+      return accepted;
+    });
+
+    if (rejected.length > 0) {
+      console.log(
+        `Campagne ${input.campaignId}: ${rejected.length} résultat(s) filtré(s):\n` +
+          rejected.slice(0, 15).join("\n")
+      );
+    }
+
+    businesses = businesses.slice(0, maxResults);
+  } else {
+    businesses = await searchBusinesses({
+      sector: input.sector,
+      city: input.city,
+      maxResults,
+    });
   }
-
-  const businesses = await searchBusinesses({
-    sector: searchQuery,
-    city: input.city,
-    maxResults,
-  });
 
   const created = [];
   for (const biz of businesses) {
