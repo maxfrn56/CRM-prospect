@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { AuditResult } from "@/lib/audit/website-audit";
+import { isCommercialAudit } from "@/lib/commercial/commercial-audit";
+import { commercialSegmentLabel } from "@/lib/commercial/segments";
 import type { ReplyClassification } from "@prisma/client";
 
 function getClient() {
@@ -249,6 +251,29 @@ Structure recommandée : accroche courte → valeur du pitch → 1 point d'audit
   const wordLimit =
     input.emailType === "INITIAL" ? "100-160 mots" : "60-120 mots";
 
+  const commercialAudit = isCommercialAudit(input.audit) ? input.audit : null;
+
+  const auditBlock = commercialAudit
+    ? `=== PROFIL COMMERCIAL (1 à 2 éléments max à intégrer) ===
+- Score pertinence : ${commercialAudit.score}/100
+- Segment cible : ${commercialSegmentLabel(commercialAudit.commercialSegment)}
+- Domaine / niche : ${commercialAudit.niche ?? "non précisé"}
+- Signaux : ${commercialAudit.commercialSignals.slice(0, 4).join("; ") || "—"}
+- Opportunités : ${commercialAudit.opportunities.slice(0, 3).join("; ") || "aucune"}
+
+Personnaliser en évoquant leur pain de prospection (temps perdu, Excel, relances manuelles, stack fragmentée).
+NE PAS parler de refonte de site web ni d'audit visuel — ce n'est pas l'offre ici.`
+    : `=== AUDIT SITE (1 à 2 éléments max à intégrer) ===
+- Score pertinence : ${input.audit.score}/100
+- Site : ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun site web"}
+- Analyse visuelle : ${
+    input.audit.visual?.analyzed
+      ? `${input.audit.visual.summary} (besoin refonte ${input.audit.visual.needsWorkScore}/100)`
+      : "non disponible"
+  }
+- Problèmes : ${input.audit.issues.slice(0, 4).join("; ") || "aucun majeur"}
+- Opportunités : ${input.audit.opportunities.slice(0, 3).join("; ") || "aucune"}`;
+
   return `Tu rédiges un email de prospection B2B en français pour ${input.senderName} (${input.companyName}).
 
 ${pitchPriorityBlock}
@@ -260,16 +285,7 @@ ${templateBlock}
 - Ville : ${input.city ?? "non précisée"}
 - Dirigeant : ${input.directorName ?? "non connu"}
 
-=== AUDIT SITE (1 à 2 éléments max à intégrer) ===
-- Score pertinence : ${input.audit.score}/100
-- Site : ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun site web"}
-- Analyse visuelle : ${
-    input.audit.visual?.analyzed
-      ? `${input.audit.visual.summary} (besoin refonte ${input.audit.visual.needsWorkScore}/100)`
-      : "non disponible"
-  }
-- Problèmes : ${input.audit.issues.slice(0, 4).join("; ") || "aucun majeur"}
-- Opportunités : ${input.audit.opportunities.slice(0, 3).join("; ") || "aucune"}
+${auditBlock}
 
 === TYPE D'EMAIL ===
 ${input.emailType} — ${followupContext}

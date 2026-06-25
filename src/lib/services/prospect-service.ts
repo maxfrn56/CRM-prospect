@@ -1,6 +1,16 @@
 import { prisma } from "@/lib/db";
 import { auditWebsite, type AuditResult } from "@/lib/audit/website-audit";
+import {
+  auditCommercialProspect,
+  type CommercialAuditResult,
+} from "@/lib/commercial/commercial-audit";
+import {
+  buildCommercialSearchQuery,
+  getCommercialPitch,
+  type CommercialSegment,
+} from "@/lib/commercial/segments";
 import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
+import type { CampaignType } from "@prisma/client";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
 import { enrichBusiness, findEmailForProspect } from "@/lib/enrichment";
@@ -57,18 +67,31 @@ export async function auditProspect(prospectId: string): Promise<AuditProspectRe
   let email = prospect.email;
   let enrichmentSource = prospect.enrichmentSource;
 
-  const audit = await auditWebsite(prospect.website, {
-    businessName: prospect.name,
-    activity: prospect.activity ?? prospect.campaign?.sector ?? undefined,
-  });
+  const campaign = prospect.campaign;
+  const isSalesTool =
+    campaign?.campaignType === "SALES_TOOL" && campaign.commercialSegment;
+
+  let audit: AuditResult | CommercialAuditResult;
+
+  if (isSalesTool) {
+    audit = await auditCommercialProspect(prospect, {
+      segment: campaign.commercialSegment as CommercialSegment,
+      niche: campaign.niche ?? campaign.sector,
+    });
+  } else {
+    audit = await auditWebsite(prospect.website, {
+      businessName: prospect.name,
+      activity: prospect.activity ?? campaign?.sector ?? undefined,
+    });
+  }
 
   if (!email) {
     const found = await findEmailForProspect(prospect.website, {
       name: prospect.name,
-      city: prospect.city ?? prospect.campaign?.city,
+      city: prospect.city ?? campaign?.city,
       postalCode: prospect.postalCode,
-      sector: prospect.campaign?.sector,
-      facebookUrl: audit.facebookUrl,
+      sector: campaign?.sector,
+      facebookUrl: "facebookUrl" in audit ? audit.facebookUrl : null,
     });
     if (found.email) {
       email = found.email;
@@ -343,6 +366,7 @@ export async function generateAndSaveEmail(
 ) {
   const prospect = await prisma.prospect.findUniqueOrThrow({
     where: { id: prospectId },
+    include: { campaign: true },
   });
 
   if (!prospect.email) {
@@ -357,6 +381,23 @@ export async function generateAndSaveEmail(
         activity: prospect.activity ?? undefined,
       });
 
+  let pitchContext = settings.pitchContext;
+  let pitchExample = settings.pitchExample || undefined;
+
+  if (
+    prospect.campaign?.campaignType === "SALES_TOOL" &&
+    prospect.campaign.commercialSegment
+  ) {
+    const pitch = getCommercialPitch(
+      prospect.campaign.commercialSegment as CommercialSegment,
+      prospect.campaign.niche ?? prospect.campaign.sector,
+      settings.senderName,
+      settings.companyName
+    );
+    pitchContext = pitch.pitchContext;
+    pitchExample = pitch.pitchExample;
+  }
+
   const generated = appendSignatureToEmail(
     await generateProspectionEmail({
       prospectName: prospect.name,
@@ -365,8 +406,8 @@ export async function generateAndSaveEmail(
       audit,
       senderName: settings.senderName,
       companyName: settings.companyName,
-      pitchContext: settings.pitchContext,
-      pitchExample: settings.pitchExample || undefined,
+      pitchContext,
+      pitchExample,
       emailType: type,
       directorName: prospect.directorName ?? undefined,
     }),
@@ -639,10 +680,23 @@ export async function importSearchResults(input: {
   sector: string;
   city: string;
   maxPages?: number;
+  campaignType?: CampaignType;
+  commercialSegment?: CommercialSegment | null;
+  niche?: string | null;
 }) {
   const maxResults = (input.maxPages ?? 3) * 20;
+  let searchQuery = input.sector;
+
+  if (input.campaignType === "SALES_TOOL" && input.commercialSegment) {
+    searchQuery = buildCommercialSearchQuery(
+      input.commercialSegment,
+      input.niche ?? input.sector,
+      input.city
+    );
+  }
+
   const businesses = await searchBusinesses({
-    sector: input.sector,
+    sector: searchQuery,
     city: input.city,
     maxResults,
   });

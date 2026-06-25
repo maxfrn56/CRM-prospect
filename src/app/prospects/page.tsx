@@ -1,13 +1,14 @@
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { PageHeader, Card, Button, EmptyState } from "@/components/ui";
 import {
   CampaignSidebar,
   type Campaign,
 } from "@/components/prospects/campaign-sidebar";
 import { ProspectTableRow } from "@/components/prospects/prospect-table-row";
+import { commercialSegmentLabel } from "@/lib/commercial/segments";
 import { ArrowUpDown, Loader2, Mail } from "lucide-react";
 
 interface Prospect {
@@ -28,6 +29,13 @@ interface Prospect {
 function ProspectsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
+  const isCommercial = pathname.startsWith("/commercial");
+  const prospectsBasePath = isCommercial
+    ? "/commercial/prospects"
+    : "/prospects";
+  const campaignType = isCommercial ? "SALES_TOOL" : "WEB_AGENCY";
+
   const campaignId = searchParams.get("campaign");
   const isImporting = searchParams.get("importing") === "1";
 
@@ -47,17 +55,17 @@ function ProspectsContent() {
   const selectedCampaign = campaigns.find((c) => c.id === campaignId) ?? null;
 
   useEffect(() => {
-    fetch("/api/campaigns")
+    fetch(`/api/campaigns?type=${campaignType}`)
       .then((r) => r.json())
       .then(setCampaigns)
       .finally(() => setCampaignsLoading(false));
-  }, []);
+  }, [campaignType]);
 
   // Auto-sélectionner la dernière campagne
   useEffect(() => {
     if (campaignsLoading || campaignId || campaigns.length === 0) return;
-    router.replace(`/prospects?campaign=${campaigns[0].id}`);
-  }, [campaigns, campaignsLoading, campaignId, router]);
+    router.replace(`${prospectsBasePath}?campaign=${campaigns[0].id}`);
+  }, [campaigns, campaignsLoading, campaignId, router, prospectsBasePath]);
 
   const loadProspects = useCallback(() => {
     if (!campaignId) return Promise.resolve();
@@ -94,7 +102,7 @@ function ProspectsContent() {
         const res = await fetch(`/api/campaigns/${campaignId}`);
         const data = await res.json();
         await loadProspects();
-        fetch("/api/campaigns")
+        fetch(`/api/campaigns?type=${campaignType}`)
           .then((r) => r.json())
           .then(setCampaigns);
 
@@ -114,7 +122,7 @@ function ProspectsContent() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isImporting, campaignId, loadProspects]);
+  }, [isImporting, campaignId, loadProspects, campaignType]);
 
   async function auditAll() {
     if (!campaignId) return;
@@ -152,7 +160,7 @@ function ProspectsContent() {
         `${data.sent} email(s) envoyé(s), ${data.skipped} ignoré(s) sur ${data.scanned} éligible(s).`
       );
       await loadProspects();
-      fetch("/api/campaigns")
+      fetch(`/api/campaigns?type=${campaignType}`)
         .then((r) => r.json())
         .then(setCampaigns);
     } catch {
@@ -170,18 +178,27 @@ function ProspectsContent() {
       throw new Error("delete failed");
     }
 
-    const updated: Campaign[] = await fetch("/api/campaigns").then((r) =>
-      r.json()
-    );
+    const updated: Campaign[] = await fetch(
+      `/api/campaigns?type=${campaignType}`
+    ).then((r) => r.json());
     setCampaigns(updated);
 
     if (campaignId === id) {
       if (updated.length > 0) {
-        router.replace(`/prospects?campaign=${updated[0].id}`);
+        router.replace(`${prospectsBasePath}?campaign=${updated[0].id}`);
       } else {
-        router.replace("/prospects");
+        router.replace(prospectsBasePath);
       }
     }
+  }
+
+  function campaignDescription(c: Campaign | null) {
+    if (!c) return "Sélectionnez une campagne";
+    if (c.campaignType === "SALES_TOOL") {
+      const segment = commercialSegmentLabel(c.commercialSegment);
+      return `${segment} · ${c.niche ?? c.sector} · ${c.city} — pitch adapté au segment`;
+    }
+    return `${c.sector} · ${c.city} — classés par pertinence`;
   }
 
   return (
@@ -191,16 +208,19 @@ function ProspectsContent() {
         selectedId={campaignId}
         loading={campaignsLoading}
         onDelete={deleteCampaign}
+        newCampaignHref={
+          isCommercial ? "/commercial/search" : "/search"
+        }
+        prospectsBasePath={prospectsBasePath}
       />
 
       <div className="flex-1 overflow-auto">
         <PageHeader
-          title={selectedCampaign?.name ?? "Prospects"}
-          description={
-            selectedCampaign
-              ? `${selectedCampaign.sector} · ${selectedCampaign.city} — classés par pertinence`
-              : "Sélectionnez une campagne"
+          title={
+            selectedCampaign?.name ??
+            (isCommercial ? "Prospects commerciaux" : "Prospects")
           }
+          description={campaignDescription(selectedCampaign)}
         >
           {campaignId && (
             <>
@@ -209,7 +229,7 @@ function ProspectsContent() {
                 onClick={auditAll}
                 disabled={auditing || loading || bulkSending}
               >
-                {auditing ? "Audit en cours…" : "Auditer tous"}
+                {auditing ? "Audit en cours…" : isCommercial ? "Qualifier tous" : "Auditer tous"}
               </Button>
               <Button
                 onClick={sendBulkEmails}

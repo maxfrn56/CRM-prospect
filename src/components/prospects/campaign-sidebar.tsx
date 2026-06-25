@@ -11,6 +11,9 @@ export interface Campaign {
   name: string;
   sector: string;
   city: string;
+  campaignType?: "WEB_AGENCY" | "SALES_TOOL";
+  commercialSegment?: string | null;
+  niche?: string | null;
   createdAt: string;
   _count: { prospects: number };
 }
@@ -20,6 +23,8 @@ interface CampaignSidebarProps {
   selectedId: string | null;
   loading?: boolean;
   onDelete?: (id: string) => Promise<void>;
+  newCampaignHref?: string;
+  prospectsBasePath?: string;
 }
 
 export function CampaignSidebar({
@@ -27,12 +32,14 @@ export function CampaignSidebar({
   selectedId,
   loading,
   onDelete,
+  newCampaignHref = "/search",
+  prospectsBasePath = "/prospects",
 }: CampaignSidebarProps) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function selectCampaign(id: string) {
-    router.push(`/prospects?campaign=${id}`);
+    router.push(`${prospectsBasePath}?campaign=${id}`);
   }
 
   async function handleDelete(c: Campaign) {
@@ -57,7 +64,7 @@ export function CampaignSidebar({
       <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-stone-900">Campagnes</h2>
         <Link
-          href="/search"
+          href={newCampaignHref}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-stone-600 hover:bg-stone-100"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -73,7 +80,7 @@ export function CampaignSidebar({
             <FolderOpen className="mx-auto h-8 w-8 text-stone-300" />
             <p className="mt-2 text-xs text-stone-500">Aucune campagne</p>
             <Link
-              href="/search"
+              href={newCampaignHref}
               className="mt-2 inline-block text-xs text-stone-700 underline"
             >
               Lancer une recherche
@@ -103,7 +110,9 @@ export function CampaignSidebar({
                         active ? "text-stone-300" : "text-stone-500"
                       }`}
                     >
-                      {c.sector} · {c.city}
+                      {c.campaignType === "SALES_TOOL"
+                        ? `${c.niche ?? c.sector} · ${c.city}`
+                        : `${c.sector} · ${c.city}`}
                     </p>
                     <p
                       className={`mt-1 text-[11px] ${

@@ -9,13 +9,16 @@ import {
   Settings,
   Mail,
   Send,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/search", label: "Recherche", icon: Search },
-  { href: "/prospects", label: "Prospects", icon: Users },
+  { href: "/search", label: "Recherche web", icon: Search },
+  { href: "/prospects", label: "Prospects web", icon: Users },
+  { href: "/commercial/search", label: "Commerciaux", icon: Briefcase },
+  { href: "/commercial/prospects", label: "Prospects commerciaux", icon: Users },
   { href: "/outreach", label: "Suivi envois", icon: Send },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];

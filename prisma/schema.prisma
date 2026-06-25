@@ -54,14 +54,30 @@ enum ContactChannel {
   OTHER
 }
 
+enum CampaignType {
+  WEB_AGENCY
+  SALES_TOOL
+}
+
+enum CommercialSegment {
+  INDEPENDENT
+  SDR_STARTUP
+  SALES_CABINET
+}
+
 model SearchCampaign {
-  id        String     @id @default(cuid())
-  name      String
-  sector    String
-  city      String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  prospects Prospect[]
+  id                String             @id @default(cuid())
+  name              String
+  sector            String
+  city              String
+  campaignType      CampaignType       @default(WEB_AGENCY)
+  commercialSegment CommercialSegment?
+  niche             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  prospects         Prospect[]
+
+  @@index([campaignType])
 }
 
 model Prospect {
