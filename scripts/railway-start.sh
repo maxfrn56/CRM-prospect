@@ -38,7 +38,12 @@ case "$DATABASE_URL" in
 esac
 
 echo "Applying database schema..."
-npx prisma db push --skip-generate
+if [ -f scripts/pre-deploy-migrate.sql ]; then
+  echo "Running pre-deploy SQL migrations..."
+  npx prisma db execute --file scripts/pre-deploy-migrate.sql --schema prisma/schema.prisma || true
+fi
+
+npx prisma db push --skip-generate --accept-data-loss
 
 echo "Starting Next.js..."
 exec npx next start
