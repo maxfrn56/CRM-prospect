@@ -254,15 +254,15 @@ Structure recommandée : accroche courte → valeur du pitch → 1 point d'audit
   const commercialAudit = isCommercialAudit(input.audit) ? input.audit : null;
 
   const auditBlock = commercialAudit
-    ? `=== PROFIL COMMERCIAL (1 à 2 éléments max à intégrer) ===
+    ? `=== PROFIL ENTREPRISE B2B (1 à 2 éléments max à intégrer) ===
 - Score pertinence : ${commercialAudit.score}/100
-- Segment cible : ${commercialSegmentLabel(commercialAudit.commercialSegment)}
-- Domaine / niche : ${commercialAudit.niche ?? "non précisé"}
+- Type cible : ${commercialSegmentLabel(commercialAudit.commercialSegment)}
+- Secteur / produit : ${commercialAudit.niche ?? "non précisé"}
 - Signaux : ${commercialAudit.commercialSignals.slice(0, 4).join("; ") || "—"}
 - Opportunités : ${commercialAudit.opportunities.slice(0, 3).join("; ") || "aucune"}
 
-Personnaliser en évoquant leur pain de prospection (temps perdu, Excel, relances manuelles, stack fragmentée).
-NE PAS parler de refonte de site web ni d'audit visuel — ce n'est pas l'offre ici.`
+Personnaliser en évoquant leur besoin de prospection B2B (trouver magasins, revendeurs, clients pro), la charge manuelle (Excel, relances), et l'intérêt d'un CRM installé et personnalisé pour leur équipe.
+NE PAS parler de refonte de site web, ni cibler des "commerciaux freelance" — ici on vend un OUTIL à une ENTREPRISE B2B vendeuse.`
     : `=== AUDIT SITE (1 à 2 éléments max à intégrer) ===
 - Score pertinence : ${input.audit.score}/100
 - Site : ${input.audit.hasWebsite ? input.audit.websiteUrl : "Aucun site web"}

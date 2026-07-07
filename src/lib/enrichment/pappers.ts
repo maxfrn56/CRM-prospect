@@ -8,6 +8,10 @@ export interface PappersEnrichment {
   effectif?: string;
   formeJuridique?: string;
   dirigeant?: string;
+  isCeased?: boolean;
+  statusLabel?: string;
+  cessationDate?: string | null;
+  radiationDate?: string | null;
   matched: boolean;
 }
 
@@ -21,6 +25,10 @@ interface PappersEntreprise {
   capital?: number;
   effectif?: string;
   forme_juridique?: string;
+  entreprise_cessee?: boolean;
+  date_cessation?: string | null;
+  date_radiation?: string | null;
+  statut_consolide?: string;
   representants?: { nom_complet?: string; qualite?: string }[];
 }
 
@@ -87,6 +95,8 @@ async function searchByName(
 
 function mapPappers(data: PappersEntreprise): PappersEnrichment {
   const dirigeant = data.representants?.[0]?.nom_complet;
+  const isCeased = data.entreprise_cessee === true;
+  const statusLabel = data.statut_consolide?.trim();
 
   return {
     siren: data.siren,
@@ -98,6 +108,12 @@ function mapPappers(data: PappersEntreprise): PappersEnrichment {
     effectif: data.effectif,
     formeJuridique: data.forme_juridique,
     dirigeant,
+    isCeased,
+    statusLabel: isCeased
+      ? (statusLabel ?? "Entreprise cessée (Pappers)")
+      : statusLabel,
+    cessationDate: data.date_cessation ?? null,
+    radiationDate: data.date_radiation ?? null,
     matched: Boolean(data.siren),
   };
 }

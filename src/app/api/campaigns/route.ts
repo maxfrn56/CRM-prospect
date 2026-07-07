@@ -14,7 +14,7 @@ const schema = z
     maxPages: z.number().min(1).max(5).optional(),
     campaignType: z.enum(["WEB_AGENCY", "SALES_TOOL"]).optional(),
     commercialSegment: z
-      .enum(["INDEPENDENT", "SDR_STARTUP", "SALES_CABINET"])
+      .enum(["B2B_BRAND", "WHOLESALER", "MANUFACTURER"])
       .optional(),
     niche: z.string().optional(),
   })

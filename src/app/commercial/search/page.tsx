@@ -8,7 +8,6 @@ import {
   buildCommercialSearchQueries,
   type CommercialSegment,
 } from "@/lib/commercial/segments";
-import { isCommercialVerticalNiche } from "@/lib/commercial/prospect-filter";
 import { Loader2 } from "lucide-react";
 
 async function parseApiResponse(res: Response) {
@@ -33,7 +32,7 @@ export default function CommercialSearchPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
-    segment: "INDEPENDENT" as CommercialSegment,
+    segment: "B2B_BRAND" as CommercialSegment,
     niche: "",
     city: "",
     maxPages: 2,
@@ -85,24 +84,31 @@ export default function CommercialSearchPage() {
   return (
     <>
       <PageHeader
-        title="Prospection commerciaux"
-        description="Ciblez indépendants, SDR startup ou cabinets — pitch adapté au segment et à la niche"
+        title="Prospection B2B — vendeurs"
+        description="Ciblez marques, grossistes et fabricants qui vendent à des magasins ou entreprises — pitch CRM de prospection sur mesure"
       />
 
       <div className="mx-auto max-w-2xl p-8">
         <Card className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Objectif : contacter des <strong>entreprises B2B</strong> (ex. une
+              marque de surf qui vend à des shops), pas des magasins retail ni
+              des commerciaux freelance. Vous leur proposez d&apos;installer
+              votre outil de prospection automatique, personnalisé à leur secteur.
+            </div>
+
             <Field
               label="Nom de la campagne"
               value={form.name}
               onChange={(v) => setForm({ ...form, name: v })}
-              placeholder="Ex: Indépendants immo Lyon — Juin 2026"
+              placeholder="Ex: Marques surf Sud-Ouest — Juillet 2026"
               required
             />
 
             <fieldset>
               <legend className="mb-2 text-sm font-medium text-stone-700">
-                Type de commercial
+                Type d&apos;entreprise B2B
               </legend>
               <div className="grid gap-2 sm:grid-cols-3">
                 {SEGMENTS.map((seg) => (
@@ -139,7 +145,7 @@ export default function CommercialSearchPage() {
 
             <div>
               <Field
-                label="Domaine / niche de prédilection"
+                label="Secteur / produit"
                 value={form.niche}
                 onChange={(v) => setForm({ ...form, niche: v })}
                 placeholder={`Ex: ${segmentConfig.defaultNiches.slice(0, 3).join(", ")}`}
@@ -158,25 +164,23 @@ export default function CommercialSearchPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-stone-500">
-                {form.niche.trim() && isCommercialVerticalNiche(form.niche)
-                  ? "Vertical commercial (immo, assurance…) : recherche + pitch adaptés."
-                  : "Niche métier (sport, IT…) : recherche des commerciaurs qui vendent dans ce secteur, pas les clubs ou écoles. Résultats filtrés automatiquement."}
+                Ex. « surf » → marques/grossistes surf qui vendent aux magasins,
+                pas les clubs ni les surf shops retail.
               </p>
             </div>
 
             <Field
-              label="Ville"
+              label="Ville ou zone"
               value={form.city}
               onChange={(v) => setForm({ ...form, city: v })}
-              placeholder="Ex: Paris, Lyon, Bordeaux"
+              placeholder="Ex: Biarritz, Pays basque, Nouvelle-Aquitaine"
               required
             />
 
             {previewQueries.length > 0 && (
               <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
                 <p className="font-medium text-stone-700">
-                  Requêtes Google Places ({previewQueries.length}) + filtre
-                  anti-bruit
+                  Requêtes Google Places ({previewQueries.length}) + filtre B2B
                 </p>
                 <ul className="mt-2 list-inside list-disc space-y-0.5">
                   {previewQueries.map((q) => (
@@ -184,8 +188,7 @@ export default function CommercialSearchPage() {
                   ))}
                 </ul>
                 <p className="mt-2 text-stone-500">
-                  Les clubs, écoles, coachs et coworkings sont exclus
-                  automatiquement.
+                  Exclus : magasins retail, boutiques, clubs, écoles, restos.
                 </p>
               </div>
             )}
@@ -231,7 +234,7 @@ export default function CommercialSearchPage() {
                   Lancement…
                 </>
               ) : (
-                "Lancer la campagne commerciale"
+                "Lancer la campagne B2B"
               )}
             </Button>
           </form>

@@ -17,8 +17,8 @@ const nav = [
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/search", label: "Recherche web", icon: Search },
   { href: "/prospects", label: "Prospects web", icon: Users },
-  { href: "/commercial/search", label: "Commerciaux", icon: Briefcase },
-  { href: "/commercial/prospects", label: "Prospects commerciaux", icon: Users },
+  { href: "/commercial/search", label: "Prospection B2B", icon: Briefcase },
+  { href: "/commercial/prospects", label: "Prospects B2B", icon: Users },
   { href: "/outreach", label: "Suivi envois", icon: Send },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];

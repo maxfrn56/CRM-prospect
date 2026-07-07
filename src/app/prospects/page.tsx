@@ -196,7 +196,7 @@ function ProspectsContent() {
     if (!c) return "Sélectionnez une campagne";
     if (c.campaignType === "SALES_TOOL") {
       const segment = commercialSegmentLabel(c.commercialSegment);
-      return `${segment} · ${c.niche ?? c.sector} · ${c.city} — pitch adapté au segment`;
+      return `${segment} · ${c.niche ?? c.sector} · ${c.city} — pitch CRM prospection B2B`;
     }
     return `${c.sector} · ${c.city} — classés par pertinence`;
   }
@@ -218,7 +218,7 @@ function ProspectsContent() {
         <PageHeader
           title={
             selectedCampaign?.name ??
-            (isCommercial ? "Prospects commerciaux" : "Prospects")
+            (isCommercial ? "Prospects B2B" : "Prospects")
           }
           description={campaignDescription(selectedCampaign)}
         >
@@ -229,7 +229,7 @@ function ProspectsContent() {
                 onClick={auditAll}
                 disabled={auditing || loading || bulkSending}
               >
-                {auditing ? "Audit en cours…" : isCommercial ? "Qualifier tous" : "Auditer tous"}
+                {auditing ? "Qualification…" : isCommercial ? "Qualifier tous" : "Auditer tous"}
               </Button>
               <Button
                 onClick={sendBulkEmails}

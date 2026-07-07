@@ -10,6 +10,12 @@ import {
   type CommercialSegment,
 } from "@/lib/commercial/segments";
 import { filterCommercialProspect } from "@/lib/commercial/prospect-filter";
+import {
+  assessProspectActivity,
+  applyActivityToAudit,
+} from "@/lib/audit/activity-assessment";
+import { fetchLegalStatus } from "@/lib/enrichment/legal-status";
+import { fetchGooglePlaceActivity } from "@/lib/google-places/place-activity";
 import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
 import type { CampaignType } from "@prisma/client";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
@@ -107,22 +113,46 @@ export async function auditProspect(prospectId: string): Promise<AuditProspectRe
     }
   }
 
+  const activityResult = await enrichActivityAndApply(audit, {
+    name: prospect.name,
+    siren: prospect.siren,
+    siret: prospect.siret,
+    city: prospect.city,
+    postalCode: prospect.postalCode,
+    googlePlaceId: prospect.googlePlaceId,
+    reviewCount: prospect.reviewCount,
+  });
+  audit = activityResult.audit;
+
   await prisma.prospect.update({
     where: { id: prospectId },
     data: {
       email,
-      enrichmentSource,
+      enrichmentSource: activityResult.legalUpdate?.enrichmentSource
+        ? enrichmentSource
+          ? `${enrichmentSource}+${activityResult.legalUpdate.enrichmentSource}`
+          : activityResult.legalUpdate.enrichmentSource
+        : enrichmentSource,
       auditScore: audit.score,
       auditDetails: JSON.stringify(audit),
       auditedAt: new Date(),
-      status: "AUDITED",
+      status: activityResult.markArchived ? "ARCHIVED" : "AUDITED",
+      ...(activityResult.legalUpdate
+        ? {
+            siren: activityResult.legalUpdate.siren,
+            siret: activityResult.legalUpdate.siret,
+            legalName: activityResult.legalUpdate.legalName,
+            directorName: activityResult.legalUpdate.directorName,
+          }
+        : {}),
     },
   });
 
   const autoOutreach = await tryAutoOutreachAfterAudit(
     prospectId,
     audit.score,
-    email
+    email,
+    audit.activity?.level
   );
 
   return {
@@ -136,7 +166,8 @@ export async function auditProspect(prospectId: string): Promise<AuditProspectRe
 async function tryAutoOutreachAfterAudit(
   prospectId: string,
   auditScore: number,
-  email: string | null
+  email: string | null,
+  activityLevel?: string
 ): Promise<AuditProspectResult["autoOutreach"]> {
   const settings = await getSettings();
 
@@ -145,6 +176,14 @@ async function tryAutoOutreachAfterAudit(
       eligible: false,
       sent: false,
       reason: "Envoi automatique désactivé dans Paramètres",
+    };
+  }
+
+  if (activityLevel === "CLOSED") {
+    return {
+      eligible: false,
+      sent: false,
+      reason: "Entreprise cessée ou fermée — envoi bloqué",
     };
   }
 
@@ -787,6 +826,78 @@ export async function importSearchResults(input: {
   );
 
   return created;
+}
+
+async function enrichActivityAndApply(
+  audit: AuditResult | CommercialAuditResult,
+  input: {
+    name: string;
+    siren: string | null;
+    siret: string | null;
+    city: string | null;
+    postalCode: string | null;
+    googlePlaceId: string | null;
+    reviewCount: number | null;
+  }
+): Promise<{
+  audit: AuditResult | CommercialAuditResult;
+  markArchived: boolean;
+  legalUpdate?: {
+    siren?: string;
+    siret?: string;
+    legalName?: string;
+    directorName?: string;
+    enrichmentSource?: string;
+  };
+}> {
+  const [legal, google] = await Promise.all([
+    fetchLegalStatus({
+      name: input.name,
+      siren: input.siren,
+      siret: input.siret,
+      city: input.city,
+      postalCode: input.postalCode,
+    }),
+    fetchGooglePlaceActivity(input.googlePlaceId),
+  ]);
+
+  const assessment = assessProspectActivity({
+    legal,
+    google,
+    storedReviewCount: input.reviewCount,
+  });
+
+  const updatedAudit = applyActivityToAudit(audit, assessment);
+  const markArchived = assessment.level === "CLOSED";
+
+  const legalUpdate: {
+    siren?: string;
+    siret?: string;
+    legalName?: string;
+    directorName?: string;
+    enrichmentSource?: string;
+  } = {};
+
+  if (legal.siren && !input.siren) legalUpdate.siren = legal.siren;
+  if (legal.siret && !input.siret) legalUpdate.siret = legal.siret;
+  if (legal.legalName) legalUpdate.legalName = legal.legalName;
+  if (legal.directorName) legalUpdate.directorName = legal.directorName;
+  if (legal.matched) {
+    legalUpdate.enrichmentSource = legal.sources.join("+");
+  }
+
+  return {
+    audit: updatedAudit,
+    markArchived,
+    legalUpdate:
+      legalUpdate.siren ||
+      legalUpdate.siret ||
+      legalUpdate.legalName ||
+      legalUpdate.directorName ||
+      legalUpdate.enrichmentSource
+        ? legalUpdate
+        : undefined,
+  };
 }
 
 async function getSettings() {

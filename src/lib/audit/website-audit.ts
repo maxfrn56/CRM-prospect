@@ -11,8 +11,11 @@ import {
   analyzeWebsiteVisual,
   type VisualAuditResult,
 } from "@/lib/llm/gemini-visual-audit";
+import type { ActivityAssessment } from "@/lib/audit/activity-assessment";
 
 export type { VisualAuditResult, VisualDesignRating } from "@/lib/llm/gemini-visual-audit";
+export type { ActivityAssessment, ActivityLevel } from "@/lib/audit/activity-assessment";
+export { activityLevelLabel } from "@/lib/audit/activity-assessment";
 export { visualRatingLabel } from "@/lib/llm/gemini-visual-audit";
 
 export interface AuditResult {
@@ -28,6 +31,7 @@ export interface AuditResult {
   instagramUrl: string | null;
   facebookUrl: string | null;
   visual: VisualAuditResult | null;
+  activity?: ActivityAssessment | null;
   issues: string[];
   opportunities: string[];
   summary: string;

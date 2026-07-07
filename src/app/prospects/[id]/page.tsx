@@ -14,6 +14,7 @@ import {
   CONTACT_CHANNELS,
   statusBadgeClass,
 } from "@/lib/utils";
+import { activityLevelLabel } from "@/lib/audit/activity-assessment";
 import { ArrowLeft, Globe, Mail, Phone, Loader2, CheckCircle2, Instagram, Facebook } from "lucide-react";
 import {
   MockupSection,
@@ -35,6 +36,24 @@ interface AuditDetails {
   outdatedDesign: boolean;
   instagramUrl?: string | null;
   facebookUrl?: string | null;
+  activity?: {
+    level: string;
+    scorePenalty: number;
+    signals: string[];
+    legal?: {
+      status: string;
+      label: string;
+      closureDate?: string | null;
+      radiationDate?: string | null;
+      sources: string[];
+    };
+    google?: {
+      businessStatus?: string | null;
+      lastReviewDate?: string | null;
+      monthsSinceLastReview?: number | null;
+      reviewCount?: number | null;
+    };
+  } | null;
   visual?: {
     analyzed: boolean;
     designQuality: number;
@@ -614,6 +633,71 @@ export default function ProspectDetailPage() {
                   invert
                 />
               </div>
+
+              {audit.activity && (
+                <div
+                  className={`mt-5 rounded-lg border p-4 ${
+                    audit.activity.level === "CLOSED"
+                      ? "border-red-200 bg-red-50"
+                      : audit.activity.level === "LIKELY_INACTIVE"
+                        ? "border-amber-200 bg-amber-50"
+                        : audit.activity.level === "UNCERTAIN"
+                          ? "border-yellow-200 bg-yellow-50"
+                          : "border-emerald-200 bg-emerald-50"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">
+                      Activité entreprise
+                    </p>
+                    <Badge
+                      className={
+                        audit.activity.level === "CLOSED"
+                          ? "bg-red-100 text-red-800"
+                          : audit.activity.level === "LIKELY_INACTIVE"
+                            ? "bg-amber-100 text-amber-900"
+                            : audit.activity.level === "UNCERTAIN"
+                              ? "bg-yellow-100 text-yellow-900"
+                              : "bg-emerald-100 text-emerald-800"
+                      }
+                    >
+                      {activityLevelLabel(
+                        audit.activity.level as
+                          | "ACTIVE"
+                          | "UNCERTAIN"
+                          | "LIKELY_INACTIVE"
+                          | "CLOSED"
+                      )}
+                    </Badge>
+                    {audit.activity.scorePenalty > 0 && (
+                      <span className="text-xs text-stone-500">
+                        −{audit.activity.scorePenalty} pts sur le score
+                      </span>
+                    )}
+                  </div>
+                  {audit.activity.legal?.label && (
+                    <p className="mt-2 text-sm text-stone-700">
+                      INSEE / Pappers : {audit.activity.legal.label}
+                    </p>
+                  )}
+                  {audit.activity.google?.monthsSinceLastReview != null && (
+                    <p className="mt-1 text-sm text-stone-700">
+                      Dernier avis Google : il y a{" "}
+                      {audit.activity.google.monthsSinceLastReview} mois
+                      {audit.activity.google.lastReviewDate
+                        ? ` (${formatDate(audit.activity.google.lastReviewDate)})`
+                        : ""}
+                    </p>
+                  )}
+                  {audit.activity.signals.length > 0 && (
+                    <ul className="mt-2 list-inside list-disc text-xs text-stone-600">
+                      {audit.activity.signals.slice(0, 4).map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {audit.visual?.analyzed && (
                 <div className="mt-5 rounded-lg border border-stone-200 bg-stone-50/80 p-4">

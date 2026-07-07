@@ -7,6 +7,9 @@ export interface SireneEnrichment {
   employeeRange?: string;
   creationDate?: string;
   directorName?: string;
+  administrativeStatus?: "A" | "C";
+  closureDate?: string | null;
+  openEstablishments?: number | null;
   matched: boolean;
 }
 
@@ -18,11 +21,16 @@ interface SireneResult {
   libelle_activite_principale?: string;
   tranche_effectif_salarie?: string;
   date_creation?: string;
+  date_fermeture?: string | null;
+  etat_administratif?: "A" | "C";
+  nombre_etablissements_ouverts?: number;
   siege?: {
     siret?: string;
     code_postal?: string;
     libelle_commune?: string;
     activite_principale?: string;
+    date_fermeture?: string | null;
+    etat_administratif?: "A" | "F";
   };
   dirigeants?: { nom?: string; prenoms?: string; qualite?: string }[];
 }
@@ -78,6 +86,9 @@ export async function enrichFromSirene(input: {
       employeeRange: match.tranche_effectif_salarie,
       creationDate: match.date_creation,
       directorName,
+      administrativeStatus: match.etat_administratif,
+      closureDate: match.date_fermeture ?? match.siege?.date_fermeture ?? null,
+      openEstablishments: match.nombre_etablissements_ouverts ?? null,
       matched: true,
     };
   } catch {

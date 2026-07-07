@@ -60,9 +60,9 @@ enum CampaignType {
 }
 
 enum CommercialSegment {
-  INDEPENDENT
-  SDR_STARTUP
-  SALES_CABINET
+  B2B_BRAND
+  WHOLESALER
+  MANUFACTURER
 }
 
 model SearchCampaign {
