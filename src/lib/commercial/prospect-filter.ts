@@ -6,7 +6,8 @@ import {
   expandNicheTerms,
 } from "@/lib/commercial/geo-zones";
 
-const EXCLUDED_GOOGLE_TYPES = new Set([
+/** Toujours exclus */
+const HARD_EXCLUDED_GOOGLE_TYPES = new Set([
   "gym",
   "sports_club",
   "fitness_center",
@@ -24,125 +25,69 @@ const EXCLUDED_GOOGLE_TYPES = new Set([
   "bakery",
   "meal_takeaway",
   "meal_delivery",
-  "beauty_salon",
-  "hair_care",
-  "spa",
   "supermarket",
   "grocery_store",
   "convenience_store",
-  "clothing_store",
-  "shoe_store",
-  "sporting_goods_store",
-  "jewelry_store",
-  "furniture_store",
-  "home_goods_store",
-  "department_store",
-  "shopping_mall",
   "moving_company",
 ]);
 
-const B2B_GOOGLE_TYPES = new Set([
-  "factory",
-  "corporate_office",
-  "storage",
-  "warehouse",
-  "wholesaler",
+/** Exclus sauf pour le segment « marque » (magasins / showrooms de marque OK) */
+const RETAIL_GOOGLE_TYPES = new Set([
+  "sporting_goods_store",
+  "clothing_store",
+  "shoe_store",
+  "jewelry_store",
+  "department_store",
+  "shopping_mall",
 ]);
 
-const EXCLUDED_TEXT_PATTERNS: RegExp[] = [
-  /\bclub\b/i,
-  /\bécole\b/i,
-  /\becole\b/i,
-  /\buniversité\b/i,
-  /\bcoworking\b/i,
-  /\bsalle de sport\b/i,
-  /\bcoach\b/i,
-  /\bassociation\b/i,
+const ALWAYS_EXCLUDED_TEXT: RegExp[] = [
+  /\bécole de surf\b/i,
+  /\bsurf school\b/i,
+  /\bcours de surf\b/i,
+  /\bclub de surf\b/i,
+  /\bsurf club\b/i,
+  /\bstage de surf\b/i,
+  /\bcamp de surf\b/i,
+  /\blocation de surf\b/i,
+  /\blocation planche\b/i,
   /\bcentre de formation\b/i,
+  /\buniversité\b/i,
+  /\bdéménagement\b/i,
+  /\bdemenagement\b/i,
+  /\btransgourmet\b/i,
   /\brestaurant\b/i,
   /\bhôtel\b/i,
   /\bhotel\b/i,
-  /\bdéménagement\b/i,
-  /\bdemenagement\b/i,
 ];
 
-const RETAIL_ONLY_PATTERNS: RegExp[] = [
-  /\bmagasin\b/i,
-  /\bboutique\b/i,
-  /\bconcept store\b/i,
-  /\bshop\b/i,
-  /\bstore\b/i,
-  /\bau détail\b/i,
-  /\bretail\b/i,
-  /\bépicier\b/i,
-  /\bprimeur\b/i,
-  /\bshowroom\b/i,
+const WRONG_SECTOR_TEXT: RegExp[] = [
+  /\balimentaire\b/i,
+  /\bboisson\b/i,
+  /\bpetfood\b/i,
+  /\bhygiène pro\b/i,
+  /\bpharmacie\b/i,
+  /\bimmobilier\b/i,
+  /\bassurance\b/i,
+  /\bautomobile\b/i,
+  /\bplombier\b/i,
+  /\bélectricien\b/i,
 ];
 
 const B2B_SIGNAL_PATTERNS: RegExp[] = [
   /\bmarque\b/i,
   /\bbrand\b/i,
   /\bfabricant\b/i,
-  /\bmanufacturer\b/i,
-  /\bfabrication\b/i,
-  /\bindustriel\b/i,
-  /\béquipementier\b/i,
-  /\bequipementier\b/i,
   /\bgrossiste\b/i,
-  /\bwholesale\b/i,
   /\bdistributeur\b/i,
-  /\bdistribution\b/i,
   /\bimportateur\b/i,
   /\bfournisseur\b/i,
-  /\bB2B\b/i,
   /\bprofessionnels\b/i,
   /\brevendeur/i,
-  /\brevendeurs\b/i,
-  /\bexport\b/i,
   /\busine\b/i,
   /\batelier\b/i,
+  /\bshaper\b/i,
 ];
-
-/** Secteurs hors niche — rejetés si la niche ne correspond pas */
-const CROSS_SECTOR_PATTERNS: RegExp[] = [
-  /\balimentaire\b/i,
-  /\bboisson\b/i,
-  /\bpetfood\b/i,
-  /\bhygiène\b/i,
-  /\bhygiene\b/i,
-  /\btransgourmet\b/i,
-  /\bmetro\b/i,
-  /\bbricolage\b/i,
-  /\bpharmacie\b/i,
-  /\bautomobile\b/i,
-  /\bimmobilier\b/i,
-  /\bassurance\b/i,
-];
-
-const SEGMENT_PATTERNS: Record<CommercialSegment, RegExp[]> = {
-  B2B_BRAND: [
-    /\bmarque\b/i,
-    /\bbrand\b/i,
-    /\bfabricant\b/i,
-    /\bcréateur\b/i,
-    /\brevendeur/i,
-    /\bgrossiste\b/i,
-    /\bdistributeur\b/i,
-  ],
-  WHOLESALER: [
-    /\bgrossiste\b/i,
-    /\bdistributeur\b/i,
-    /\bimportateur\b/i,
-    /\bfournisseur\b/i,
-  ],
-  MANUFACTURER: [
-    /\bfabricant\b/i,
-    /\bfabrication\b/i,
-    /\bindustriel\b/i,
-    /\béquipementier\b/i,
-    /\busine\b/i,
-  ],
-};
 
 function combinedText(biz: BusinessResult): string {
   return [biz.name, biz.activity, biz.address, ...(biz.types ?? [])]
@@ -151,18 +96,21 @@ function combinedText(biz: BusinessResult): string {
     .toLowerCase();
 }
 
-function hasExcludedGoogleType(types?: string[]): boolean {
-  if (!types?.length) return false;
-  return types.some((t) => EXCLUDED_GOOGLE_TYPES.has(t));
-}
-
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
 }
 
-function isCrossSectorMismatch(text: string, niche: string): boolean {
-  if (!matchesAny(text, CROSS_SECTOR_PATTERNS)) return false;
-  return !mentionsNiche(text, niche);
+function hasExcludedGoogleType(
+  types: string[] | undefined,
+  segment: CommercialSegment
+): boolean {
+  if (!types?.length) return false;
+  return types.some((t) => {
+    if (HARD_EXCLUDED_GOOGLE_TYPES.has(t)) return true;
+    if (segment === "B2B_BRAND" && RETAIL_GOOGLE_TYPES.has(t)) return false;
+    if (RETAIL_GOOGLE_TYPES.has(t)) return true;
+    return false;
+  });
 }
 
 export interface CommercialFilterResult {
@@ -175,6 +123,10 @@ export interface CommercialFilterOptions {
   targetLocation?: string | null;
 }
 
+/**
+ * Segment B2B_BRAND = trouver des MARQUES dans la niche (B2C, B2B ou mixte).
+ * On fait confiance à la requête Google + filtre géo, sans exiger « grossiste » dans le nom.
+ */
 export function filterCommercialProspect(
   biz: BusinessResult,
   segment: CommercialSegment,
@@ -187,58 +139,50 @@ export function filterCommercialProspect(
   if (targetLocation?.trim() && !matchesTargetArea(biz, targetLocation)) {
     return {
       accepted: false,
-      reason: `hors zone « ${targetLocation} » (${biz.city ?? "ville inconnue"})`,
+      reason: `hors zone (${biz.city ?? "?"})`,
     };
   }
 
-  if (hasExcludedGoogleType(biz.types)) {
+  if (hasExcludedGoogleType(biz.types, segment)) {
     return {
       accepted: false,
-      reason: `type Google exclu (${biz.types?.slice(0, 2).join(", ")})`,
+      reason: `type exclu (${biz.types?.slice(0, 2).join(", ")})`,
     };
   }
 
-  if (matchesAny(text, EXCLUDED_TEXT_PATTERNS)) {
-    return { accepted: false, reason: "activité hors cible" };
+  if (matchesAny(text, ALWAYS_EXCLUDED_TEXT)) {
+    return { accepted: false, reason: "école / club / location / hors cible" };
   }
 
-  const hasB2bSignal = matchesAny(text, B2B_SIGNAL_PATTERNS);
-  const isRetailOnly =
-    matchesAny(text, RETAIL_ONLY_PATTERNS) && !hasB2bSignal;
+  if (matchesAny(text, WRONG_SECTOR_TEXT) && !mentionsNiche(text, nicheNorm)) {
+    return { accepted: false, reason: "secteur sans rapport" };
+  }
 
-  if (isRetailOnly) {
+  if (segment === "B2B_BRAND") {
+    return {
+      accepted: true,
+      reason: mentionsNiche(text, nicheNorm)
+        ? "marque / acteur niche confirmé"
+        : "résultat requête niche — retenu",
+    };
+  }
+
+  if (nicheNorm && !mentionsNiche(text, nicheNorm)) {
     return {
       accepted: false,
-      reason: "magasin / boutique retail — pas une marque B2B vendeuse",
+      reason: `secteur « ${nicheNorm} » absent`,
     };
   }
 
-  if (nicheNorm) {
-    if (!mentionsNiche(text, nicheNorm)) {
-      return {
-        accepted: false,
-        reason: `secteur « ${nicheNorm} » absent (${biz.name})`,
-      };
-    }
-
-    if (isCrossSectorMismatch(text, nicheNorm)) {
-      return {
-        accepted: false,
-        reason: `activité d'un autre secteur (pas ${nicheNorm})`,
-      };
-    }
+  if (
+    !matchesAny(text, B2B_SIGNAL_PATTERNS) &&
+    !biz.types?.includes("wholesaler") &&
+    !biz.types?.includes("factory")
+  ) {
+    return { accepted: false, reason: "pas de profil grossiste / fabricant" };
   }
 
-  const segmentMatch = matchesAny(text, SEGMENT_PATTERNS[segment]);
-
-  if (!segmentMatch && !hasB2bSignal) {
-    return {
-      accepted: false,
-      reason: "pas de profil marque / grossiste / fabricant B2B",
-    };
-  }
-
-  return { accepted: true, reason: "marque ou distributeur B2B dans la niche" };
+  return { accepted: true, reason: "profil B2B niche" };
 }
 
 export function isCommercialVerticalNiche(_niche: string): boolean {

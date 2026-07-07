@@ -734,7 +734,7 @@ export async function importSearchResults(input: {
     const segment = input.commercialSegment as CommercialSegment;
     const niche = input.niche ?? input.sector;
     const queries = buildCommercialSearchQueries(segment, niche, input.city);
-    const perQuery = Math.ceil(maxResults / queries.length) + 5;
+    const perQuery = 12;
     const seen = new Set<string>();
     const raw: Awaited<ReturnType<typeof searchBusinesses>> = [];
 
@@ -751,11 +751,11 @@ export async function importSearchResults(input: {
           raw.push(biz);
         }
       }
-      await sleep(300);
+      await sleep(250);
     }
 
     const rejected: string[] = [];
-    businesses = raw.filter((biz) => {
+    let filtered = raw.filter((biz) => {
       const { accepted, reason } = filterCommercialProspect(biz, segment, {
         niche,
         targetLocation: input.city,
@@ -768,12 +768,11 @@ export async function importSearchResults(input: {
 
     if (rejected.length > 0) {
       console.log(
-        `Campagne ${input.campaignId}: ${rejected.length} résultat(s) filtré(s):\n` +
-          rejected.slice(0, 15).join("\n")
+        `Campagne ${input.campaignId}: ${raw.length} bruts → ${filtered.length} retenus (${rejected.length} filtrés)`
       );
     }
 
-    businesses = businesses.slice(0, maxResults);
+    businesses = filtered.slice(0, maxResults);
   } else {
     businesses = await searchBusinesses({
       sector: input.sector,

@@ -28,11 +28,11 @@ export const COMMERCIAL_SEGMENTS: Record<
 > = {
   B2B_BRAND: {
     id: "B2B_BRAND",
-    label: "Marque B2B",
-    shortLabel: "Marque B2B",
+    label: "Marque (niche)",
+    shortLabel: "Marque",
     description:
-      "Marques qui vendent à des magasins, revendeurs ou enseignes (ex. marque de surf → shops).",
-    searchHint: "marque, fabricant, vente revendeurs, grossiste",
+      "Marques du secteur — B2C, B2B ou mixte (ex. marque de surf, shop + wholesale).",
+    searchHint: "marque, fabricant, équipement, shop du secteur",
     defaultNiches: [
       "surf",
       "sport",
@@ -44,17 +44,17 @@ export const COMMERCIAL_SEGMENTS: Record<
     ],
     pitchContext: `${SHARED_PITCH_BASE}
 
-Segment : marque B2B qui développe un réseau de points de vente / revendeurs.
-Angle : automatiser la prospection de nouveaux magasins et relancer les comptes dormants — outil installé au sein de l'entreprise, adapté à leur catalogue et à leurs cibles retail/pro.`,
+Segment : marque ou acteur reconnu du secteur (B2C, B2B ou les deux).
+Angle : automatiser la prospection de nouveaux points de vente, revendeurs ou comptes pro — outil installé et personnalisé pour leur équipe commerciale.`,
     pitchExample: `Bonjour,
 
-Je m'appelle {expéditeur}. J'accompagne des marques B2B qui développent leur réseau de magasins et revendeurs — et qui perdent un temps fou à prospecter à la main.
+Je m'appelle {expéditeur}. J'accompagne des marques {niche} qui développent leur réseau de distribution — magasins, revendeurs, comptes pro — et qui perdent un temps fou à prospecter à la main.
 
-J'ai construit un CRM de prospection automatique (ciblage, emails personnalisés, relances, suivi) que j'installe et configure sur mesure pour chaque marque : vos produits, vos cibles, votre territoire.
+J'installe un CRM de prospection automatique (ciblage, emails personnalisés, relances, suivi) configuré sur mesure pour votre secteur et vos cibles.
 
-Si votre équipe cherche encore de nouveaux points de vente sur Excel ou LinkedIn sans automatisation, je peux vous montrer en 15 minutes comment structurer ça pour {niche/secteur} — sans engagement.
+Que vous vendiez déjà en B2B, en direct ou les deux, si votre équipe cherche encore de nouveaux comptes sur Excel sans automatisation, je peux vous montrer en 15 minutes comment structurer ça — sans engagement.
 
-Seriez-vous disponible cette semaine pour une courte démo ?`,
+Disponible pour une courte démo cette semaine ?`,
   },
   WHOLESALER: {
     id: "WHOLESALER",

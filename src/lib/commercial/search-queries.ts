@@ -2,8 +2,8 @@ import type { CommercialSegment } from "@/lib/commercial/segments";
 import { detectGeoZone, resolveSearchCities } from "@/lib/commercial/geo-zones";
 
 /**
- * Requêtes strictement liées à la niche + zone géographique concrète.
- * Les régions (ex. Nouvelle-Aquitaine) sont déclinées en villes hubs.
+ * Requêtes pour trouver des MARQUES / acteurs du secteur (B2C + B2B).
+ * Régions déclinées en plusieurs villes pour couvrir toute la zone.
  */
 export function buildCommercialSearchQueries(
   segment: CommercialSegment,
@@ -15,25 +15,26 @@ export function buildCommercialSearchQueries(
   const queries = new Set<string>();
 
   if (!n) {
-    return [`${segment} B2B ${city.trim()}`];
+    return [`marque ${city.trim()}`];
   }
 
   for (const loc of locations) {
     switch (segment) {
       case "B2B_BRAND":
+        queries.add(`marque de ${n} ${loc}`);
         queries.add(`marque ${n} ${loc}`);
-        queries.add(`marque ${n} grossiste ${loc}`);
+        queries.add(`${n} ${loc}`);
         queries.add(`fabricant ${n} ${loc}`);
-        queries.add(`distributeur ${n} professionnel ${loc}`);
-        queries.add(`${n} vente revendeurs ${loc}`);
-        queries.add(`équipement ${n} B2B ${loc}`);
+        queries.add(`équipement ${n} ${loc}`);
+        queries.add(`industrie ${n} ${loc}`);
+        queries.add(`shaper ${n} ${loc}`);
+        queries.add(`surf shop ${loc}`);
         break;
 
       case "WHOLESALER":
         queries.add(`grossiste ${n} ${loc}`);
         queries.add(`distributeur ${n} ${loc}`);
         queries.add(`importateur ${n} ${loc}`);
-        queries.add(`fournisseur ${n} professionnel ${loc}`);
         break;
 
       case "MANUFACTURER":
@@ -59,7 +60,7 @@ export function buildCommercialSearchQuery(
 export function describeSearchZone(city: string): string {
   const zone = detectGeoZone(city);
   if (zone) {
-    return `${zone.label} (${zone.searchCities.slice(0, 4).join(", ")}…)`;
+    return `${zone.label} — ${zone.searchCities.length} villes (${zone.searchCities.slice(0, 5).join(", ")}…)`;
   }
   return city.trim();
 }

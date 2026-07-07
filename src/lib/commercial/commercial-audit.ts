@@ -1,6 +1,7 @@
 import type { AuditResult } from "@/lib/audit/website-audit";
 import type { CommercialSegment } from "@/lib/commercial/segments";
 import { getCommercialSegment } from "@/lib/commercial/segments";
+import { mentionsNiche } from "@/lib/commercial/geo-zones";
 
 export interface CommercialAuditResult extends AuditResult {
   auditKind: "commercial";
@@ -40,12 +41,14 @@ export async function auditCommercialProspect(
   const name = prospect.name.toLowerCase();
   const activity = (prospect.activity ?? prospect.nafLabel ?? "").toLowerCase();
   const combined = `${name} ${activity}`;
+  const nicheVal = options.niche?.trim() ?? null;
 
-  if (B2B_KEYWORDS.test(combined)) {
+  if (B2B_KEYWORDS.test(combined) || (nicheVal && mentionsNiche(combined, nicheVal))) {
     score += 22;
-    signals.push("Profil B2B vendeur (marque / grossiste / fabricant)");
+    signals.push("Acteur du secteur (marque, shop, fabricant…)");
   } else {
-    issues.push("Signal B2B faible — à confirmer manuellement");
+    score += 10;
+    signals.push("Retenu via recherche secteur — à confirmer");
   }
 
   const hasWebsite = Boolean(prospect.website?.trim());

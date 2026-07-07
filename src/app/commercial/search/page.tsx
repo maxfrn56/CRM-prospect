@@ -86,18 +86,18 @@ export default function CommercialSearchPage() {
   return (
     <>
       <PageHeader
-        title="Prospection B2B — vendeurs"
-        description="Ciblez marques, grossistes et fabricants qui vendent à des magasins ou entreprises — pitch CRM de prospection sur mesure"
+        title="Prospection marques"
+        description="Trouvez les marques d'un secteur (B2C, B2B ou mixte) — pitch CRM de prospection sur mesure"
       />
 
       <div className="mx-auto max-w-2xl p-8">
         <Card className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-              Objectif : contacter des <strong>entreprises B2B</strong> (ex. une
-              marque de surf qui vend à des shops), pas des magasins retail ni
-              des commerciaux freelance. Vous leur proposez d&apos;installer
-              votre outil de prospection automatique, personnalisé à leur secteur.
+              Objectif : trouver les <strong>marques et acteurs du secteur</strong>{" "}
+              (ex. marques de surf, shops, fabricants) — qu&apos;ils fassent du B2C,
+              du B2B ou les deux. On exclut les écoles de surf, clubs et
+              entreprises hors secteur.
             </div>
 
             <Field
@@ -166,10 +166,8 @@ export default function CommercialSearchPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-stone-500">
-                Seules les entreprises dont le nom ou l&apos;activité mentionne
-                explicitement « {form.niche || "votre secteur"} » seront
-                conservées. Les grossistes alimentaires ou hors zone sont
-                exclus.
+                Les marques, shops et fabricants du secteur sont inclus. Les
+                écoles de surf, clubs et grossistes alimentaires sont exclus.
               </p>
             </div>
 
@@ -199,7 +197,8 @@ export default function CommercialSearchPage() {
                   ))}
                 </ul>
                 <p className="mt-2 text-stone-500">
-                  Exclus : magasins retail, boutiques, clubs, écoles, restos.
+                  Filtre : zone géographique + exclusion écoles / clubs / hors
+                  secteur. Pas besoin du mot « grossiste » dans le nom.
                 </p>
               </div>
             )}
