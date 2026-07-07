@@ -756,7 +756,10 @@ export async function importSearchResults(input: {
 
     const rejected: string[] = [];
     businesses = raw.filter((biz) => {
-      const { accepted, reason } = filterCommercialProspect(biz, segment, niche);
+      const { accepted, reason } = filterCommercialProspect(biz, segment, {
+        niche,
+        targetLocation: input.city,
+      });
       if (!accepted) {
         rejected.push(`${biz.name}: ${reason}`);
       }

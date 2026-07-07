@@ -1,54 +1,48 @@
 import type { CommercialSegment } from "@/lib/commercial/segments";
+import { detectGeoZone, resolveSearchCities } from "@/lib/commercial/geo-zones";
 
 /**
- * Requêtes orientées entreprises B2B (marque, grossiste, fabricant),
- * pas magasins retail ni commerciaux freelance.
+ * Requêtes strictement liées à la niche + zone géographique concrète.
+ * Les régions (ex. Nouvelle-Aquitaine) sont déclinées en villes hubs.
  */
 export function buildCommercialSearchQueries(
   segment: CommercialSegment,
   niche: string,
   city: string
 ): string[] {
-  const c = city.trim();
   const n = niche.trim();
+  const locations = resolveSearchCities(city);
   const queries = new Set<string>();
 
-  switch (segment) {
-    case "B2B_BRAND":
-      if (n) {
-        queries.add(`marque ${n} grossiste ${c}`);
-        queries.add(`fabricant ${n} B2B ${c}`);
-        queries.add(`marque ${n} vente revendeurs ${c}`);
-        queries.add(`distributeur ${n} professionnel ${c}`);
-      }
-      queries.add(`marque grossiste ${c}`);
-      queries.add(`fabricant B2B ${c}`);
-      queries.add(`vente aux professionnels ${c}`);
-      break;
+  if (!n) {
+    return [`${segment} B2B ${city.trim()}`];
+  }
 
-    case "WHOLESALER":
-      if (n) {
-        queries.add(`grossiste ${n} ${c}`);
-        queries.add(`distributeur ${n} B2B ${c}`);
-        queries.add(`importateur ${n} ${c}`);
-        queries.add(`fournisseur ${n} professionnel ${c}`);
-      }
-      queries.add(`grossiste alimentaire ${c}`);
-      queries.add(`distributeur B2B ${c}`);
-      queries.add(`grossiste professionnel ${c}`);
-      break;
+  for (const loc of locations) {
+    switch (segment) {
+      case "B2B_BRAND":
+        queries.add(`marque ${n} ${loc}`);
+        queries.add(`marque ${n} grossiste ${loc}`);
+        queries.add(`fabricant ${n} ${loc}`);
+        queries.add(`distributeur ${n} professionnel ${loc}`);
+        queries.add(`${n} vente revendeurs ${loc}`);
+        queries.add(`équipement ${n} B2B ${loc}`);
+        break;
 
-    case "MANUFACTURER":
-      if (n) {
-        queries.add(`fabricant ${n} industriel ${c}`);
-        queries.add(`équipementier ${n} ${c}`);
-        queries.add(`industrie ${n} ${c}`);
-        queries.add(`manufacture ${n} ${c}`);
-      }
-      queries.add(`fabricant industriel ${c}`);
-      queries.add(`équipementier B2B ${c}`);
-      queries.add(`usine ${c}`);
-      break;
+      case "WHOLESALER":
+        queries.add(`grossiste ${n} ${loc}`);
+        queries.add(`distributeur ${n} ${loc}`);
+        queries.add(`importateur ${n} ${loc}`);
+        queries.add(`fournisseur ${n} professionnel ${loc}`);
+        break;
+
+      case "MANUFACTURER":
+        queries.add(`fabricant ${n} ${loc}`);
+        queries.add(`fabricant ${n} industriel ${loc}`);
+        queries.add(`équipementier ${n} ${loc}`);
+        queries.add(`usine ${n} ${loc}`);
+        break;
+    }
   }
 
   return [...queries];
@@ -60,4 +54,12 @@ export function buildCommercialSearchQuery(
   city: string
 ): string {
   return buildCommercialSearchQueries(segment, niche, city)[0] ?? `${niche} ${city}`;
+}
+
+export function describeSearchZone(city: string): string {
+  const zone = detectGeoZone(city);
+  if (zone) {
+    return `${zone.label} (${zone.searchCities.slice(0, 4).join(", ")}…)`;
+  }
+  return city.trim();
 }

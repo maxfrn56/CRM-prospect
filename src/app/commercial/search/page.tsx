@@ -8,6 +8,7 @@ import {
   buildCommercialSearchQueries,
   type CommercialSegment,
 } from "@/lib/commercial/segments";
+import { describeSearchZone } from "@/lib/commercial/search-queries";
 import { Loader2 } from "lucide-react";
 
 async function parseApiResponse(res: Response) {
@@ -39,6 +40,7 @@ export default function CommercialSearchPage() {
   });
 
   const segmentConfig = COMMERCIAL_SEGMENTS[form.segment];
+  const searchZone = form.city.trim() ? describeSearchZone(form.city) : "";
   const previewQueries =
     form.city.trim()
       ? buildCommercialSearchQueries(
@@ -164,8 +166,10 @@ export default function CommercialSearchPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-stone-500">
-                Ex. « surf » → marques/grossistes surf qui vendent aux magasins,
-                pas les clubs ni les surf shops retail.
+                Seules les entreprises dont le nom ou l&apos;activité mentionne
+                explicitement « {form.niche || "votre secteur"} » seront
+                conservées. Les grossistes alimentaires ou hors zone sont
+                exclus.
               </p>
             </div>
 
@@ -176,6 +180,13 @@ export default function CommercialSearchPage() {
               placeholder="Ex: Biarritz, Pays basque, Nouvelle-Aquitaine"
               required
             />
+            {form.city.trim() && (
+              <p className="-mt-4 text-xs text-stone-500">
+                Zone de recherche : {searchZone}
+                {form.city.toLowerCase().includes("aquitaine") &&
+                  " — recherche déclinée en villes côtières (Biarritz, Hossegor…)"}
+              </p>
+            )}
 
             {previewQueries.length > 0 && (
               <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
