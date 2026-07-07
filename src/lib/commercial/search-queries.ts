@@ -29,6 +29,14 @@ export function buildCommercialSearchQueries(
         queries.add(`industrie ${n} ${loc}`);
         queries.add(`shaper ${n} ${loc}`);
         queries.add(`surf shop ${loc}`);
+        if (n.toLowerCase().includes("surf")) {
+          queries.add(`shaper planches ${loc}`);
+          queries.add(`planche de surf ${loc}`);
+          queries.add(`atelier planche ${loc}`);
+          queries.add(`équipement glisse ${loc}`);
+          queries.add(`marque planche ${loc}`);
+          queries.add(`fabricant planches ${loc}`);
+        }
         break;
 
       case "WHOLESALER":

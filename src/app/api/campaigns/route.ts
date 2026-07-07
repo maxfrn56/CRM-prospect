@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { importSearchResults } from "@/lib/services/prospect-service";
 import { z } from "zod";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const schema = z
   .object({

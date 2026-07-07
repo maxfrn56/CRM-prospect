@@ -9,7 +9,7 @@ import {
   getCommercialPitch,
   type CommercialSegment,
 } from "@/lib/commercial/segments";
-import { filterCommercialProspect } from "@/lib/commercial/prospect-filter";
+import { assessNicheRelevance } from "@/lib/commercial/niche-relevance";
 import {
   assessProspectActivity,
   applyActivityToAudit,
@@ -729,6 +729,16 @@ export async function importSearchResults(input: {
     input.campaignType === "SALES_TOOL" && input.commercialSegment;
 
   let businesses;
+  let enrichMeta:
+    | Map<
+        string,
+        {
+          biz: Awaited<ReturnType<typeof searchBusinesses>>[0];
+          enrichedActivity: string | null;
+          profileSnippet: string | null;
+        }
+      >
+    | undefined;
 
   if (isCommercial) {
     const segment = input.commercialSegment as CommercialSegment;
@@ -755,24 +765,37 @@ export async function importSearchResults(input: {
     }
 
     const rejected: string[] = [];
-    let filtered = raw.filter((biz) => {
-      const { accepted, reason } = filterCommercialProspect(biz, segment, {
+    const accepted: Array<{
+      biz: (typeof raw)[0];
+      enrichedActivity: string | null;
+      profileSnippet: string | null;
+    }> = [];
+
+    const maxAssess = Math.min(raw.length, maxResults * 4);
+    for (let i = 0; i < maxAssess && accepted.length < maxResults; i++) {
+      const biz = raw[i];
+      const rel = await assessNicheRelevance(biz, segment, {
         niche,
         targetLocation: input.city,
       });
-      if (!accepted) {
-        rejected.push(`${biz.name}: ${reason}`);
+      if (!rel.accepted) {
+        rejected.push(`${biz.name}: ${rel.reason}`);
+        continue;
       }
-      return accepted;
-    });
-
-    if (rejected.length > 0) {
-      console.log(
-        `Campagne ${input.campaignId}: ${raw.length} bruts → ${filtered.length} retenus (${rejected.length} filtrés)`
-      );
+      accepted.push({
+        biz,
+        enrichedActivity: rel.enrichedActivity,
+        profileSnippet: rel.profileSnippet,
+      });
+      await sleep(60);
     }
 
-    businesses = filtered.slice(0, maxResults);
+    console.log(
+      `Campagne ${input.campaignId}: ${raw.length} bruts → ${accepted.length} retenus (${rejected.length} filtrés, ${maxAssess} analysés)`
+    );
+
+    businesses = accepted.map((a) => a.biz);
+    enrichMeta = new Map(accepted.map((a) => [a.biz.googlePlaceId, a]));
   } else {
     businesses = await searchBusinesses({
       sector: input.sector,
@@ -793,12 +816,19 @@ export async function importSearchResults(input: {
       skipPappers: true,
     });
 
+    const meta = isCommercial
+      ? enrichMeta?.get(biz.googlePlaceId)
+      : undefined;
+
     const prospect = await prisma.prospect.create({
       data: {
         campaignId: input.campaignId,
         googlePlaceId: enriched.googlePlaceId,
         name: enriched.name,
-        activity: enriched.activity ?? enriched.nafLabel,
+        activity:
+          meta?.enrichedActivity ??
+          enriched.activity ??
+          enriched.nafLabel,
         address: enriched.address,
         city: enriched.city ?? input.city,
         postalCode: enriched.postalCode,
@@ -816,6 +846,9 @@ export async function importSearchResults(input: {
         directorName: enriched.directorName,
         employeeRange: enriched.employeeRange,
         enrichmentSource: enriched.enrichmentSource,
+        contactNotes: meta?.profileSnippet
+          ? `Profil Google: ${meta.profileSnippet}`
+          : undefined,
         status: "NEW",
       },
     });

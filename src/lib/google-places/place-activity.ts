@@ -1,3 +1,5 @@
+import { getGooglePlacesApiKey, normalizePlaceId } from "@/lib/google-places/place-id";
+
 const FIELD_MASK = [
   "businessStatus",
   "userRatingCount",
@@ -10,18 +12,6 @@ export interface GooglePlaceActivity {
   lastReviewDate?: string | null;
   monthsSinceLastReview?: number | null;
   fetched: boolean;
-}
-
-function getApiKey() {
-  const key = process.env.GOOGLE_PLACES_API_KEY;
-  if (!key) return null;
-  return key;
-}
-
-function normalizePlaceId(placeId: string): string {
-  const trimmed = placeId.trim();
-  if (trimmed.startsWith("places/")) return trimmed.slice("places/".length);
-  return trimmed;
 }
 
 function monthsBetween(from: Date, to: Date): number {
@@ -42,7 +32,7 @@ export async function fetchGooglePlaceActivity(
     monthsSinceLastReview: null,
   };
 
-  const apiKey = getApiKey();
+  const apiKey = getGooglePlacesApiKey();
   if (!apiKey || !googlePlaceId?.trim()) return empty;
 
   const placeId = normalizePlaceId(googlePlaceId);
