@@ -5,6 +5,15 @@ import {
   mentionsNiche,
   expandNicheTerms,
 } from "@/lib/commercial/geo-zones";
+import {
+  B2B_SIGNAL_PATTERNS,
+  B2C_EXCLUSION_PATTERNS,
+  hasB2BSignal,
+  isB2CExcluded,
+  isPureRetailGoogleType,
+  hasB2BGoogleType,
+  matchesAny,
+} from "@/lib/commercial/b2b-profile";
 
 /** Toujours exclus */
 const HARD_EXCLUDED_GOOGLE_TYPES = new Set([
@@ -31,36 +40,6 @@ const HARD_EXCLUDED_GOOGLE_TYPES = new Set([
   "moving_company",
 ]);
 
-/** Exclus sauf pour le segment « marque » (magasins / showrooms de marque OK) */
-const RETAIL_GOOGLE_TYPES = new Set([
-  "sporting_goods_store",
-  "clothing_store",
-  "shoe_store",
-  "jewelry_store",
-  "department_store",
-  "shopping_mall",
-]);
-
-const ALWAYS_EXCLUDED_TEXT: RegExp[] = [
-  /\bécole de surf\b/i,
-  /\bsurf school\b/i,
-  /\bcours de surf\b/i,
-  /\bclub de surf\b/i,
-  /\bsurf club\b/i,
-  /\bstage de surf\b/i,
-  /\bcamp de surf\b/i,
-  /\blocation de surf\b/i,
-  /\blocation planche\b/i,
-  /\bcentre de formation\b/i,
-  /\buniversité\b/i,
-  /\bdéménagement\b/i,
-  /\bdemenagement\b/i,
-  /\btransgourmet\b/i,
-  /\brestaurant\b/i,
-  /\bhôtel\b/i,
-  /\bhotel\b/i,
-];
-
 const WRONG_SECTOR_TEXT: RegExp[] = [
   /\balimentaire\b/i,
   /\bboisson\b/i,
@@ -74,21 +53,6 @@ const WRONG_SECTOR_TEXT: RegExp[] = [
   /\bélectricien\b/i,
 ];
 
-const B2B_SIGNAL_PATTERNS: RegExp[] = [
-  /\bmarque\b/i,
-  /\bbrand\b/i,
-  /\bfabricant\b/i,
-  /\bgrossiste\b/i,
-  /\bdistributeur\b/i,
-  /\bimportateur\b/i,
-  /\bfournisseur\b/i,
-  /\bprofessionnels\b/i,
-  /\brevendeur/i,
-  /\busine\b/i,
-  /\batelier\b/i,
-  /\bshaper\b/i,
-];
-
 function combinedText(biz: BusinessResult): string {
   return [biz.name, biz.activity, biz.address, ...(biz.types ?? [])]
     .filter(Boolean)
@@ -96,21 +60,9 @@ function combinedText(biz: BusinessResult): string {
     .toLowerCase();
 }
 
-function matchesAny(text: string, patterns: RegExp[]): boolean {
-  return patterns.some((p) => p.test(text));
-}
-
-function hasExcludedGoogleType(
-  types: string[] | undefined,
-  segment: CommercialSegment
-): boolean {
+function hasExcludedGoogleType(types: string[] | undefined): boolean {
   if (!types?.length) return false;
-  return types.some((t) => {
-    if (HARD_EXCLUDED_GOOGLE_TYPES.has(t)) return true;
-    if (segment === "B2B_BRAND" && RETAIL_GOOGLE_TYPES.has(t)) return false;
-    if (RETAIL_GOOGLE_TYPES.has(t)) return true;
-    return false;
-  });
+  return types.some((t) => HARD_EXCLUDED_GOOGLE_TYPES.has(t));
 }
 
 export interface CommercialFilterResult {
@@ -124,8 +76,8 @@ export interface CommercialFilterOptions {
 }
 
 /**
- * Segment B2B_BRAND = trouver des MARQUES dans la niche (B2C, B2B ou mixte).
- * On fait confiance à la requête Google + filtre géo, sans exiger « grossiste » dans le nom.
+ * Segment B2B_BRAND = marques B2B du secteur (fabricants, marques avec réseau pro).
+ * Magasins B2C et écoles exclus dès le pré-filtre si détectables sans enrichissement.
  */
 export function filterCommercialProspect(
   biz: BusinessResult,
@@ -143,15 +95,15 @@ export function filterCommercialProspect(
     };
   }
 
-  if (hasExcludedGoogleType(biz.types, segment)) {
+  if (hasExcludedGoogleType(biz.types)) {
     return {
       accepted: false,
       reason: `type exclu (${biz.types?.slice(0, 2).join(", ")})`,
     };
   }
 
-  if (matchesAny(text, ALWAYS_EXCLUDED_TEXT)) {
-    return { accepted: false, reason: "école / club / location / hors cible" };
+  if (isB2CExcluded(text)) {
+    return { accepted: false, reason: "école / magasin B2C / location" };
   }
 
   if (matchesAny(text, WRONG_SECTOR_TEXT) && !mentionsNiche(text, nicheNorm)) {
@@ -159,11 +111,23 @@ export function filterCommercialProspect(
   }
 
   if (segment === "B2B_BRAND") {
+    if (
+      isPureRetailGoogleType(biz.types) &&
+      !hasB2BSignal(text) &&
+      !hasB2BGoogleType(biz.types)
+    ) {
+      const nameLooksRetail =
+        /\b(surf\s*shop|magasin|boutique|shop)\b/i.test(biz.name ?? "");
+      if (nameLooksRetail) {
+        return {
+          accepted: false,
+          reason: "magasin retail B2C (nom)",
+        };
+      }
+    }
     return {
       accepted: true,
-      reason: mentionsNiche(text, nicheNorm)
-        ? "marque / acteur niche confirmé"
-        : "résultat requête niche — retenu",
+      reason: "candidat marque — qualification B2B à l'enrichissement",
     };
   }
 
@@ -175,7 +139,7 @@ export function filterCommercialProspect(
   }
 
   if (
-    !matchesAny(text, B2B_SIGNAL_PATTERNS) &&
+    !hasB2BSignal(text) &&
     !biz.types?.includes("wholesaler") &&
     !biz.types?.includes("factory")
   ) {
@@ -189,4 +153,4 @@ export function isCommercialVerticalNiche(_niche: string): boolean {
   return false;
 }
 
-export { expandNicheTerms, matchesTargetArea, mentionsNiche };
+export { expandNicheTerms, matchesTargetArea, mentionsNiche, B2B_SIGNAL_PATTERNS, B2C_EXCLUSION_PATTERNS };

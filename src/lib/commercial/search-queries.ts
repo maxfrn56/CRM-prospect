@@ -2,8 +2,8 @@ import type { CommercialSegment } from "@/lib/commercial/segments";
 import { detectGeoZone, resolveSearchCities } from "@/lib/commercial/geo-zones";
 
 /**
- * Requêtes pour trouver des MARQUES / acteurs du secteur (B2C + B2B).
- * Régions déclinées en plusieurs villes pour couvrir toute la zone.
+ * Requêtes pour trouver des MARQUES B2B du secteur (fabricants, marques avec réseau pro).
+ * Pas de surf shop / magasins B2C — filtrés ensuite via profil B2B.
  */
 export function buildCommercialSearchQueries(
   segment: CommercialSegment,
@@ -23,19 +23,17 @@ export function buildCommercialSearchQueries(
       case "B2B_BRAND":
         queries.add(`marque de ${n} ${loc}`);
         queries.add(`marque ${n} ${loc}`);
-        queries.add(`${n} ${loc}`);
         queries.add(`fabricant ${n} ${loc}`);
         queries.add(`équipement ${n} ${loc}`);
         queries.add(`industrie ${n} ${loc}`);
         queries.add(`shaper ${n} ${loc}`);
-        queries.add(`surf shop ${loc}`);
+        queries.add(`distributeur ${n} ${loc}`);
         if (n.toLowerCase().includes("surf")) {
           queries.add(`shaper planches ${loc}`);
-          queries.add(`planche de surf ${loc}`);
           queries.add(`atelier planche ${loc}`);
-          queries.add(`équipement glisse ${loc}`);
           queries.add(`marque planche ${loc}`);
           queries.add(`fabricant planches ${loc}`);
+          queries.add(`fabricant surfboard ${loc}`);
         }
         break;
 

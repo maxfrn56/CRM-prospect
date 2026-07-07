@@ -31,8 +31,8 @@ export const COMMERCIAL_SEGMENTS: Record<
     label: "Marque (niche)",
     shortLabel: "Marque",
     description:
-      "Marques du secteur — B2C, B2B ou mixte (ex. marque de surf, shop + wholesale).",
-    searchHint: "marque, fabricant, équipement, shop du secteur",
+      "Marques B2B du secteur — fabricants, marques avec réseau revendeurs (pas magasins B2C ni écoles).",
+    searchHint: "marque, fabricant, shaper, distributeur du secteur",
     defaultNiches: [
       "surf",
       "sport",
@@ -44,7 +44,7 @@ export const COMMERCIAL_SEGMENTS: Record<
     ],
     pitchContext: `${SHARED_PITCH_BASE}
 
-Segment : marque ou acteur reconnu du secteur (B2C, B2B ou les deux).
+Segment : marque B2B du secteur (fabricant, marque avec réseau de distribution).
 Angle : automatiser la prospection de nouveaux points de vente, revendeurs ou comptes pro — outil installé et personnalisé pour leur équipe commerciale.`,
     pitchExample: `Bonjour,
 

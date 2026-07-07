@@ -45,10 +45,10 @@ export async function auditCommercialProspect(
 
   if (B2B_KEYWORDS.test(combined) || (nicheVal && mentionsNiche(combined, nicheVal))) {
     score += 22;
-    signals.push("Acteur du secteur (marque, shop, fabricant…)");
+    signals.push("Acteur B2B du secteur (marque, fabricant, distributeur…)");
   } else {
-    score += 10;
-    signals.push("Retenu via recherche secteur — à confirmer");
+    score += 4;
+    issues.push("Profil B2B peu visible — à valider manuellement");
   }
 
   const hasWebsite = Boolean(prospect.website?.trim());
