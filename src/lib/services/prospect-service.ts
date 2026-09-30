@@ -17,6 +17,7 @@ import {
 import { fetchLegalStatus } from "@/lib/enrichment/legal-status";
 import { fetchGooglePlaceActivity } from "@/lib/google-places/place-activity";
 import { generateProspectionEmail, appendSignatureToEmail } from "@/lib/llm/gemini";
+import { plainTextToHtml } from "@/lib/email/plain-text";
 import type { CampaignType } from "@prisma/client";
 import { sendEmail, appendProspectTracking } from "@/lib/email/resend";
 import { searchBusinesses } from "@/lib/google-places/client";
@@ -471,6 +472,46 @@ export async function generateAndSaveEmail(
       bodyText: generated.bodyText,
       status: "DRAFT",
       followupDay,
+    },
+  });
+}
+
+export async function regenerateInitialEmail(prospectId: string) {
+  await prisma.email.deleteMany({
+    where: { prospectId, type: "INITIAL", status: "DRAFT" },
+  });
+  return generateAndSaveEmail(prospectId, "INITIAL");
+}
+
+export async function updateEmailDraft(
+  emailId: string,
+  prospectId: string,
+  data: { subject: string; bodyText: string }
+) {
+  const subject = data.subject.trim();
+  const bodyText = data.bodyText.trim();
+
+  if (!subject) {
+    throw new Error("Le sujet de l'email est requis");
+  }
+  if (!bodyText) {
+    throw new Error("Le corps de l'email est requis");
+  }
+
+  const email = await prisma.email.findFirst({
+    where: { id: emailId, prospectId, status: "DRAFT" },
+  });
+
+  if (!email) {
+    throw new Error("Brouillon introuvable ou déjà envoyé");
+  }
+
+  return prisma.email.update({
+    where: { id: emailId },
+    data: {
+      subject,
+      bodyText,
+      bodyHtml: plainTextToHtml(bodyText),
     },
   });
 }

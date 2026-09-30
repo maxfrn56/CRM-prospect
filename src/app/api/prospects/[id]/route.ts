@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   auditProspect,
   generateAndSaveEmail,
+  regenerateInitialEmail,
   sendProspectEmail,
+  updateEmailDraft,
 } from "@/lib/services/prospect-service";
 import { findEmailForProspect } from "@/lib/enrichment";
 import { prisma } from "@/lib/db";
@@ -47,7 +49,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const body = (await req.json()) as { action: string; emailId?: string };
+  const body = (await req.json()) as {
+    action: string;
+    emailId?: string;
+    subject?: string;
+    bodyText?: string;
+  };
   const { action } = body;
 
   try {
@@ -123,7 +130,28 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json(found);
       }
       case "generate-email": {
-        const email = await generateAndSaveEmail(id, "INITIAL");
+        const existingDraft = await prisma.email.findFirst({
+          where: { prospectId: id, type: "INITIAL", status: "DRAFT" },
+          orderBy: { createdAt: "desc" },
+        });
+        const email = existingDraft ?? (await generateAndSaveEmail(id, "INITIAL"));
+        return NextResponse.json({ email });
+      }
+      case "regenerate-email": {
+        const email = await regenerateInitialEmail(id);
+        return NextResponse.json({ email });
+      }
+      case "save-email-draft": {
+        if (!body.emailId || body.subject === undefined || body.bodyText === undefined) {
+          return NextResponse.json(
+            { error: "emailId, subject et bodyText requis" },
+            { status: 400 }
+          );
+        }
+        const email = await updateEmailDraft(body.emailId, id, {
+          subject: body.subject,
+          bodyText: body.bodyText,
+        });
         return NextResponse.json({ email });
       }
       case "send-email": {
@@ -152,20 +180,16 @@ export async function POST(req: NextRequest, { params }: Params) {
           );
         }
 
-        let emailId = body.emailId;
-        if (!emailId) {
-          const existingDraft = await prisma.email.findFirst({
-            where: { prospectId: id, type: "INITIAL", status: "DRAFT" },
-            orderBy: { createdAt: "desc" },
-          });
-          if (existingDraft) {
-            emailId = existingDraft.id;
-          } else {
-            const draft = await generateAndSaveEmail(id, "INITIAL");
-            emailId = draft.id;
-          }
+        if (!body.emailId) {
+          return NextResponse.json(
+            {
+              error:
+                "Aucun brouillon sélectionné — générez et validez l'email avant envoi.",
+            },
+            { status: 400 }
+          );
         }
-        const result = await sendProspectEmail(emailId);
+        const result = await sendProspectEmail(body.emailId);
         return NextResponse.json({ result });
       }
       case "launch-mockup": {

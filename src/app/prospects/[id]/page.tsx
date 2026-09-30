@@ -24,6 +24,7 @@ import {
   ProspectEmailList,
   ProspectReplyList,
 } from "@/components/prospects/email-message-list";
+import { EmailComposer } from "@/components/prospects/email-composer";
 
 interface AuditDetails {
   score: number;
@@ -268,6 +269,19 @@ export default function ProspectDetailPage() {
     prospect.campaign?.sector ?? prospect.activity ?? ""
   );
 
+  const initialDraft =
+    prospect.emails.find(
+      (e) => e.type === "INITIAL" && e.status === "DRAFT"
+    ) ?? null;
+
+  const hasInitialSent = prospect.emails.some(
+    (e) =>
+      e.type === "INITIAL" &&
+      ["SENT", "DELIVERED", "OPENED", "REPLIED"].includes(e.status)
+  );
+
+  const sentEmails = prospect.emails.filter((e) => e.status !== "DRAFT");
+
   return (
     <>
       <PageHeader title={prospect.name} description={prospect.activity ?? undefined}>
@@ -420,19 +434,6 @@ export default function ProspectDetailPage() {
                   "Auditer le site"
                 )}
               </Button>
-              {prospect.email && (
-                <Button
-                  size="sm"
-                  onClick={() => runAction("send-email")}
-                  disabled={!!actionLoading}
-                >
-                  {actionLoading === "send-email" ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    "Envoyer email"
-                  )}
-                </Button>
-              )}
               {!prospect.email && (
                 <Button
                   size="sm"
@@ -592,6 +593,16 @@ export default function ProspectDetailPage() {
         </div>
 
         <div className="space-y-4 lg:col-span-2">
+          {prospect.email && (
+            <EmailComposer
+              prospectId={prospect.id}
+              recipientEmail={prospect.email}
+              draft={initialDraft}
+              hasInitialSent={hasInitialSent}
+              onUpdated={load}
+            />
+          )}
+
           {audit && (
             <Card className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -793,7 +804,7 @@ export default function ProspectDetailPage() {
                 Contenu des messages passés par Resend
               </p>
             </div>
-            <ProspectEmailList emails={prospect.emails} />
+            <ProspectEmailList emails={sentEmails} />
           </Card>
 
           {prospect.replies.length > 0 && (
